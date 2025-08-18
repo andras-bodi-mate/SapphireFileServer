@@ -17,26 +17,8 @@ coverage
 /cypress/videos/
 /cypress/screenshots/
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
 *.tsbuildinfo
-
-# Python
-*.pyc
-.venv/
-env/
 
 # Node / frontend
 node_modules/
 dist/
-
-# System
-.DS_Store
