@@ -1,7 +1,7 @@
 <template>
   <v-app>
     <!-- Header -->
-    <v-app-bar color="primary" dark app>
+    <v-app-bar :color="theme.global.name.value === 'light' ? 'primary' : 'grey-darken-3'" app>
       <v-btn icon variant="plain" :ripple="false" href="http://localhost:5173/">
         <img
           src="/res/images/logo.svg"
@@ -11,9 +11,12 @@
       
       <v-toolbar-title>Sapphire File Server</v-toolbar-title>
       
-      <div style="display: flex; align-items: center; gap: 5px;">
+      <div class="d-flex justify-space-between align-center ga-2 pa-3">
+        <v-btn :icon="theme.global.name.value === 'dark' ? 'mdi-moon-waxing-crescent' : 'mdi-white-balance-sunny'"
+        @click="switchTheme()"
+        ></v-btn>
         <span>Signed in as:</span>
-        <v-btn prepend-icon="mdi-account-circle" stacked circle>
+        <v-btn prepend-icon="mdi-account-circle" rounded="xl" stacked circle>
           admin
         </v-btn>
       </div>
@@ -45,19 +48,23 @@
     </v-navigation-drawer>
 
     <v-main>
-      <v-container style="height: 100%;" @click.self="selectedFiles = []">
-        <div v-shortkey="['ctrl', 'a']" @shortkey="selectAll()" style="display: none"></div>
-        <div v-shortkey="['ctrl', 'i']" @shortkey="invertSelection()" style="display: none"></div>
+      <v-container style="height: 100%;" @click.self="selectedItems = []">
+        <div v-shortkey="['ctrl', 'a']" @shortkey="isRenaming || isDeleting ? 0 : selectAll()" style="display: none"></div>
+        <div v-shortkey="['ctrl', 'i']" @shortkey="isRenaming || isDeleting ? 0 : invertSelection()" style="display: none"></div>
         <div v-shortkey="['esc']" @shortkey="cancelOperation()" style="display: none"></div>
-        <v-list v-if="currentPage === Pages.MyFiles" style="user-select: none;">
+        <div v-shortkey="['arrowdown']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(1)" style="display: none"></div>
+        <div v-shortkey="['shift', 'arrowdown']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(1)" style="display: none"></div>
+        <div v-shortkey="['arrowup']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(-1)" style="display: none"></div>
+        <div v-shortkey="['shift', 'arrowup']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(-1)" style="display: none"></div>
+        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl">
           <div class="d-flex justify-center ps-4">
           </div>
           <v-breadcrumbs>
-            <v-btn width="30" height="30" icon="mdi-home" size="small" variant="text" @click="setCurrentPath('')">
+            <v-btn width="30" height="30" icon="mdi-home" size="small" variant="text" tabindex="-1" @click="setCurrentPath('')">
             </v-btn>
             <v-breadcrumbs-divider v-if="currentPath !== ''"></v-breadcrumbs-divider>
             <div v-for="pathPart in getPathParts()">
-              <v-btn height="30" class="text-none" variant="text" rounded="pill" style="padding: 0 8px;" @click="setCurrentPath(pathPart)">
+              <v-btn height="30" class="text-none" variant="text" rounded="pill" tabindex="-1" style="padding: 0 8px;" @click="setCurrentPath(pathPart)">
                 {{ getPathLastFolder(pathPart) }}
               </v-btn>
               <v-breadcrumbs-divider></v-breadcrumbs-divider>
@@ -66,38 +73,57 @@
           <v-divider></v-divider>
           <div class="d-flex justify-space-between">
             <div class="d-flex justify-start ga-2 pa-3">
-              <v-btn class="text-none" prepend-icon="mdi-arrow-left-top" variant="text" rounded="pill" :disabled="currentPath === ''" @click="goBackDirectory()">Go back</v-btn>
+              <v-btn class="text-none" prepend-icon="mdi-arrow-left-top" variant="text" rounded="pill" tabindex="-1" :disabled="currentPath === ''" @click="goBackDirectory()">Go back</v-btn>
             </div>
             <div class="d-flex justify-start ga-2 pa-3">
-              <v-btn class="text-none" prepend-icon="mdi-content-cut" variant="text" rounded="pill"
-              v-shortkey="['ctrl', 'x']" @shortkey="selectedFiles.length !== 0 ? cutSelected() : 0"
-              @click="cutSelected()" :disabled="selectedFiles.length === 0">
-                Cut
+              <v-btn class="text-none" prepend-icon="mdi-folder-plus" variant="text" rounded="pill" tabindex="-1"
+              @click="createNewFolder()" v-shortkey="['ctrl', 'shift', 'n']" @shortkey="createNewFolder()">
+                New Folder
               </v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-content-copy" variant="text" rounded="pill"
-              v-shortkey="['ctrl', 'c']" @shortkey="selectedFiles.length !== 0 ? copySelected() : 0"
-              @click="copySelected()" :disabled="selectedFiles.length === 0">
-                Copy
+              <v-btn class="text-none" prepend-icon="mdi-file-plus" variant="text" rounded="pill" tabindex="-1"
+              @click="createNewFile()" v-shortkey="['alt', 'n']" @shortkey="createNewFile()">
+                New File
               </v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-content-paste" variant="text" rounded="pill"
+            </div>
+            <div class="d-flex justify-start ga-4 pa-3">
+              <v-btn height="36" width="36" icon="" variant="text" rounded="pill" tabindex="-1"
+              v-shortkey="['ctrl', 'x']" @shortkey="selectedItems.length !== 0 ? cutSelected() : 0"
+              @click="cutSelected()" :disabled="selectedItems.length === 0">
+                <v-icon size="20">mdi-content-cut</v-icon>
+              </v-btn>
+              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+              v-shortkey="['ctrl', 'c']" @shortkey="selectedItems.length !== 0 ? copySelected() : 0"
+              @click="copySelected()" :disabled="selectedItems.length === 0">
+                <v-icon size="20">mdi-content-copy</v-icon>
+              </v-btn>
+              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
               v-shortkey="['ctrl', 'v']" @shortkey="clipboard.length !== 0 ? pasteSelected() : 0"
               @click="pasteSelected()" :disabled="clipboard.length === 0">
-                Paste
+                <v-icon size="20">mdi-content-paste</v-icon>
               </v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-form-textbox" variant="text" rounded="pill"
-              v-shortkey="['f2']" @shortkey="selectedFiles.length !== 0 ? promptNewName() : 0"
-              @click="promptNewName()" :disabled="selectedFiles.length === 0">
-                Rename
+              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+              v-shortkey="['f2']" @shortkey="selectedItems.length === 1 ? promptNewName() : 0"
+              @click="promptNewName()" :disabled="selectedItems.length !== 1">
+                <v-icon size="20">mdi-form-textbox</v-icon>
               </v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-delete" variant="text" rounded="pill"
-              v-shortkey="['del']" @shortkey="selectedFiles.length !== 0 ? promptDelete() : 0"
-              @click="promptDelete()" :disabled="selectedFiles.length === 0">
-                Delete
+              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+              v-shortkey="['del']" @shortkey="selectedItems.length !== 0 ? promptDelete() : 0"
+              @click="promptDelete()" :disabled="selectedItems.length === 0">
+                <v-icon size="20">mdi-delete</v-icon>
+              </v-btn>
+              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+              @click="promptShare()" :disabled="selectedItems.length === 0">
+                <v-icon size="20">mdi-export-variant</v-icon>
               </v-btn>
             </div>
             <div class="d-flex justify-start ga-2 pa-3">
-              <v-btn class="text-none" prepend-icon="mdi-download" variant="text" rounded="pill" :disabled="selectedFiles.length === 0" @click="downloadSelectedFiles()">Download</v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-upload" variant="text" rounded="pill" >Upload</v-btn>
+              <v-btn class="text-none" prepend-icon="mdi-download" variant="text" rounded="pill" tabindex="-1"
+              :disabled="selectedItems.length === 0" @click="downloadSelectedFiles()">
+                Download
+              </v-btn>
+              <v-btn class="text-none" prepend-icon="mdi-upload" variant="text" rounded="pill" tabindex="-1">
+                Upload
+              </v-btn>
             </div>
           </div>
           <v-divider></v-divider>
@@ -107,6 +133,7 @@
                 class="text-none"
                 variant="text"
                 rounded="pill" 
+                tabindex="-1"
                 @click="
                 delayedChangeSorting(SortingModes.Name);
                 "
@@ -119,7 +146,8 @@
               <v-btn
                 class="text-none"
                 variant="text"
-                rounded="pill" 
+                rounded="pill"
+                tabindex="-1"
                 @click="
                 delayedChangeSorting(SortingModes.Type);
                 "
@@ -132,7 +160,8 @@
               <v-btn
                 class="text-none"
                 variant="text"
-                rounded="pill" 
+                rounded="pill"
+                tabindex="-1"
                 @click="
                 delayedChangeSorting(SortingModes.Size);
                 "
@@ -145,7 +174,8 @@
               <v-btn
                 class="text-none"
                 variant="text"
-                rounded="pill" 
+                rounded="pill"
+                tabindex="-1"
                 @click="
                 delayedChangeSorting(SortingModes.LastModified);
                 "
@@ -158,14 +188,16 @@
             </div>
           </v-list-item>
           <v-list-item
-            v-for="(file, index) in sortedFiles"
+            v-for="(file, index) in sortedItems"
             :key="index"
             :value="file"
-            :active="includesFile(selectedFiles, file)"
-            :disabled="filesBeingCut.includes(currentPath + file.name)"
+            :active="includesFile(selectedItems, file)"
+            :disabled="itemsBeingCut.includes(currentPath + file.name)"
+            :ref="el => {itemRefs[file.name] = el}"
+            tabindex="-1"
             color="primary"
             :style="{
-              borderRadius: getFileBorderRadius(file) + ' !important',
+              borderRadius: getItemBorderRadius(file) + ' !important',
               transition: 'border-radius 0.2s ease-in-out'
             }"
             @click="delayedToggleFileSelected(file)"
@@ -178,7 +210,7 @@
               </div>
 
               <div style="flex: 1;">
-                {{ getFileTypeDescription(file) }}
+                {{ getItemTypeDescription(file) }}
               </div>
 
               <div style="flex: 1;">
@@ -186,25 +218,35 @@
               </div>
 
               <div style="flex: 1; justify-self: right;">
-                {{ getFileLastModifiedDate(file) }}
+                {{ getItemLastModifiedDate(file) }}
               </div>
             </div>
           </v-list-item>
         </v-list>
+        <div class="pa-3" style="position: fixed; bottom: 0; right: 0px;">
+          <p>
+            {{ `${selectedItems.length} / ${sortedItems.length} items selected` }}
+          </p>
+        </div>
       </v-container>
       <v-dialog v-model="isRenaming" max-width="500">
-        <v-card class="pa-6" rounded="xl" title="Enter a new name">
-          <v-text-field v-model="fileNewName" autofocus label="New Name" :placeholder="fileNewName" persistent-placeholder type="input"></v-text-field>
+        <v-card class="ps-2 pt-6 pb-6" rounded="xl" title="Enter a new name">
+          <v-text-field class="ml-10 mr-10" variant="outlined" v-model="itemNewName" autofocus label="New Name"
+          :placeholder="itemNewName" persistent-placeholder type="input"
+          v-shortkey="['enter']" @shortkey="isRenaming ? renameSelected() : 0"
+          ></v-text-field>
           <v-card-actions>
             <v-btn @click="cancelOperation()">Cancel</v-btn>
-            <v-btn @click="renameSelected()" color="primary">Ok</v-btn>
+            <v-btn autofocus @click="renameSelected()" color="primary">Ok</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
       <v-dialog v-model="isDeleting" max-width="550">
-        <v-card class="pa-6" rounded="xl" :title="`Do you want to delete the following (${selectedFiles.length}) items?`">
+        <v-card class="pa-6" rounded="xl" :title="`Do you want to delete the following (${selectedItems.length}) items?`"
+        v-shortkey="['enter']" @shortkey="isDeleting ? deleteSelected() : 0"
+        >
           <v-list class="ps-6">
-            <div class="text-none d-flex ps-5 pb-1 pt-2 ga-2" v-for="item in selectedFiles">
+            <div class="text-none d-flex ps-5 pb-1 pt-2 ga-2" v-for="item in selectedItems">
               <v-icon>
                 {{ getFileIcon(item) }}
               </v-icon>
@@ -215,7 +257,7 @@
           </v-list>
           <v-card-actions>
             <v-btn @click="cancelOperation()">Cancel</v-btn>
-            <v-btn @click="deleteSelected()" color="primary">Ok</v-btn>
+            <v-btn autofocus @click="deleteSelected()" color="primary">Ok</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
@@ -225,8 +267,13 @@
 
 <script setup>
 import { ref, toRaw, onMounted, onBeforeUnmount } from 'vue';
+import { useTheme } from 'vuetify';
+
+import VueCookies from 'vue-cookies'
 
 import { getFileIcon, fileExtensionDescriptions } from "./fileIcons.js";
+
+const theme = useTheme()
 
 const keysDown = ref(new Set());
 
@@ -239,9 +286,10 @@ function keyUpCallback(event) {
 }
 
 onMounted(() => {
+  checkStoredTheme();
   window.addEventListener('keydown', keyDownCallback);
   window.addEventListener('keyup', keyUpCallback);
-  updateFilesAndDirectories();
+  updateItems();
 });
 
 onBeforeUnmount(() => {
@@ -274,17 +322,30 @@ const sortingOrder = ref(SortingOrders.Ascending);
 const sortingMode = ref(SortingModes.Name);
 
 const filesAndDirectories = ref([]);
-const sortedFiles = ref([]);
+const sortedItems = ref([]);
+const itemRefs = ref({});
 const clipboard = ref([]);
-const filesBeingCut = ref([]);
+const itemsBeingCut = ref([]);
 
 const isRenaming = ref(false);
-const fileNewName = ref("");
+const itemNewName = ref("");
 const isDeleting = ref(false);
 
 const isLoading = ref(false);
 
-async function updateFilesAndDirectories() {
+function checkStoredTheme() {
+  let themeCookie = VueCookies.get("app.themeCookie");
+  if (themeCookie) {
+    theme.global.name.value = themeCookie;
+  }
+}
+
+function switchTheme() {
+  theme.global.name.value = theme.global.name.value === "light" ? "dark" : "light";
+  VueCookies.set("app.themeCookie", theme.global.name.value, -1);
+}
+
+async function updateItems() {
   try {
     const response = await fetch("http://127.0.0.1:8000/files/" + currentPath.value);
     if (!response.ok) {
@@ -294,8 +355,8 @@ async function updateFilesAndDirectories() {
     const data = await response.json();
     
     filesAndDirectories.value = data;
-    sortedFiles.value = sortFiles();
-    selectedFiles.value = [];
+    sortedItems.value = sortFiles();
+    selectedItems.value = [];
   } catch (err) {
     console.error('Failed to load files:', err);
   }
@@ -314,7 +375,7 @@ async function openFile(file) {
 
 async function downloadSelectedFiles() {
   isLoading.value = true;
-  selectedFiles.value.forEach( (file, i, array) => {
+  selectedItems.value.forEach( (file, i, array) => {
       fetch("http://127.0.0.1:8000/download/" + currentPath.value + file.name)
       .then(res => res.blob())
       .then(blob => {
@@ -341,7 +402,7 @@ function changeSorting(newMode) {
     sortingOrder.value = sortingOrder.value === SortingOrders.Ascending ? SortingOrders.Descending : SortingOrders.Ascending;
   }
 
-  sortedFiles.value = sortFiles();
+  sortedItems.value = sortFiles();
 }
 
 function delayedChangeSorting(newMode) {
@@ -359,11 +420,32 @@ function getSortingIcon(mode) {
 }
 
 function getFileIndex(array, file) {
-  return array.findIndex((f) => areFilesSame(f, file));
+  return array.findIndex((f) => areItemsSame(f, file));
 }
 
 function includesFile(array, file) {
   return getFileIndex(array, file) !== -1;
+}
+
+function compareFileNames(nameA, nameB) {
+  return nameA.localeCompare(nameB);
+}
+
+function getFileScreenPosition(file) {
+  const component = itemRefs.value[file.name];
+  if (!component) return 0;
+
+  const element = component.$el;
+
+  console.log(element);
+  const rect = element.getBoundingClientRect();
+  if (rect.bottom < 0) {
+    return -1;
+  }
+  else if (rect.top > window.innerHeight) {
+    return 1;
+  }
+  return 0;
 }
 
 function sortFiles() {
@@ -371,7 +453,7 @@ function sortFiles() {
 
   switch (sortingMode.value) {
     case SortingModes.Name: return [...(filesAndDirectories.value)].sort(
-      (a, b) => sortingOrderMultipier * a.name.localeCompare(b.name)
+      (a, b) => sortingOrderMultipier * compareFileNames(a.name, b.name)
     ).reduce((result, element) => {
       result[(element.size < 0) ? 0 : 1].push(element);
       return result;
@@ -379,8 +461,8 @@ function sortFiles() {
     [[], []]).flat();
     case SortingModes.Type: return [...(filesAndDirectories.value)].sort(
       (a, b) => {
-        let fileExtensionA = getFileNameExtension(a.name);
-        let fileExtensionB = getFileNameExtension(b.name);
+        let fileExtensionA = getItemNameExtension(a.name);
+        let fileExtensionB = getItemNameExtension(b.name);
         return sortingOrderMultipier * fileExtensionA.localeCompare(fileExtensionB);
       }
     );
@@ -393,36 +475,36 @@ function sortFiles() {
   }
 }
 
-let selectedFiles = ref([]);
+let selectedItems = ref([]);
 
 function toggleFileSelected(file) {
-  const selectedFileIndex = getFileIndex(selectedFiles.value, file);
+  const selectedFileIndex = getFileIndex(selectedItems.value, file);
   if (keysDown.value.has("Control")) {
     if (selectedFileIndex === -1) {
-      selectedFiles.value.push(file);
+      selectedItems.value.push(file);
     }
     else {
-      selectedFiles.value.splice(selectedFileIndex, 1);
+      selectedItems.value.splice(selectedFileIndex, 1);
     }
   }
-  else if (keysDown.value.has("Shift") && selectedFiles.value.length !== 0) {
-    let startIndex = getFileIndex(sortedFiles.value, selectedFiles.value[0]);
-    let endIndex = getFileIndex(sortedFiles.value, file);
+  else if (keysDown.value.has("Shift") && selectedItems.value.length !== 0) {
+    let startIndex = getFileIndex(sortedItems.value, selectedItems.value[0]);
+    let endIndex = getFileIndex(sortedItems.value, file);
     
     if (endIndex < startIndex) {
-      selectedFiles.value = toRaw(sortedFiles.value).slice(endIndex, startIndex + 1).reverse();
+      selectedItems.value = toRaw(sortedItems.value).slice(endIndex, startIndex + 1).reverse();
     }
     else {
-      selectedFiles.value = toRaw(sortedFiles.value).slice(startIndex, endIndex + 1);
+      selectedItems.value = toRaw(sortedItems.value).slice(startIndex, endIndex + 1);
     }
 
   }
   else {
     if (selectedFileIndex === -1) {
-      selectedFiles.value = [file];
+      selectedItems.value = [file];
     }
     else {
-      selectedFiles.value = selectedFiles.value.length > 1 ? [file] : [];
+      selectedItems.value = selectedItems.value.length > 1 ? [file] : [];
     }
   }
 }
@@ -431,7 +513,29 @@ function delayedToggleFileSelected(file) {
   setTimeout(toggleFileSelected, 150, file);
 }
 
+function moveSelection(direction) {
+  if (keysDown.value.has("Control")) {
+    return;
+  }
+  let selectionEndIndex = getFileIndex(sortedItems.value, selectedItems.value[selectedItems.value.length - 1]);
+  if ((selectionEndIndex === 0 && direction === -1) || (selectionEndIndex === sortedItems.value.length - 1 && direction === 1)) {
+    return;
+  }
+  const newFile = sortedItems.value[selectionEndIndex + direction]
+  toggleFileSelected(newFile);
+  const fileScreenPosition = getFileScreenPosition(newFile);
+  console.log("fileScreenPosition", fileScreenPosition);
+  if (fileScreenPosition === 0) {
+    return;
+  }
+  window.scrollBy({
+    top:  fileScreenPosition * window.innerHeight * 1.0, // nearly a full page
+    behavior: "smooth"
+  });
+}
+
 function deletePaths(paths) {
+  console.log(paths);
   fetch("http://127.0.0.1:8000/modify/", {
     method: "POST",
     headers: {
@@ -442,35 +546,37 @@ function deletePaths(paths) {
       paths: paths
     })
   }).then(_ => {
-    updateFilesAndDirectories();
+    updateItems();
   });
 }
 
 function selectAll() {
-  selectedFiles.value = [...sortedFiles.value];
+  selectedItems.value = [...sortedItems.value];
 }
 
 function invertSelection() {
   let newSelection = [];
-  sortedFiles.value.forEach((file) => {
-    if (!includesFile(selectedFiles.value, file)) {
+  sortedItems.value.forEach((file) => {
+    if (!includesFile(selectedItems.value, file)) {
       newSelection.push(file);
     }
   });
-  selectedFiles.value = newSelection;
+  selectedItems.value = newSelection;
 }
 
 function cutSelected() {
-  clipboard.value = selectedFiles.value.map((file) => currentPath.value + file.name);
-  filesBeingCut.value = [...clipboard.value];
+  clipboard.value = selectedItems.value.map((file) => currentPath.value + file.name);
+  itemsBeingCut.value = [...clipboard.value];
 }
 
 function copySelected() {
-  clipboard.value = selectedFiles.value.map((file) => currentPath.value + file.name);
+  clipboard.value = selectedItems.value.map((file) => currentPath.value + file.name);
 }
 
 function pasteSelected() {
-  let filesBeforePaste = [...sortedFiles.value];
+  const numCopiedItems = selectedItems.value.length;
+  let newSelectionNames = [];
+  selectedItems.value = [];
   clipboard.value.forEach((path) => {
     fetch("http://127.0.0.1:8000/modify/", {
       method: "POST",
@@ -482,28 +588,31 @@ function pasteSelected() {
         source: path,
         destination: currentPath.value
       })
+    }).then(response => {
+      if (!response.ok) {
+        throw new Error("There was an error while copying an item.");
+      }
+      return response.json();
+    }).then(response => {
+      newSelectionNames.push(response.name);
+      if (newSelectionNames.length === numCopiedItems) {
+        updateItems().then(_ => {
+          selectedItems.value = sortedItems.value.filter(file => file.name in newSelectionNames);
+          if (itemsBeingCut.value.length !== 0) {
+            deletePaths(itemsBeingCut.value);
+            itemsBeingCut.value = [];
+            clipboard.value = [];
+          }
+          updateItems();
+        });
+      }
     });
-    if (filesBeingCut.value.length !== 0) {
-      deletePaths(filesBeingCut.value);
-      filesBeingCut.value = [];
-      clipboard.value = [];
-    }
   });
-  setTimeout(() => {
-    updateFilesAndDirectories().then(() => {
-      selectedFiles.value = [];
-      sortedFiles.value.forEach((file) => {
-        if (!includesFile(filesBeforePaste, file)) {
-          selectedFiles.value.push(file);
-        }
-      });
-    });
-  }, 100);
 }
 
 function promptNewName() {
   isRenaming.value = true;
-  fileNewName.value = selectedFiles.value[0].name;
+  itemNewName.value = selectedItems.value[0].name;
 }
 
 function renameSelected() {
@@ -515,12 +624,17 @@ function renameSelected() {
       "mode": "rename",
     },
     body: JSON.stringify({
-      path: currentPath.value + selectedFiles.value[0].name,
-      newName: fileNewName.value
+      path: currentPath.value + selectedItems.value[0].name,
+      newName: itemNewName.value
     })
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error("There was an error while renaming the item.");
+    }
+    return response.json();
   }).then(_ => {
-    fileNewName.value = "";
-    updateFilesAndDirectories();
+    itemNewName.value = "";
+    updateItems();
   });
 }
 
@@ -529,18 +643,60 @@ function promptDelete() {
 }
 
 function deleteSelected() {
-  deletePaths(selectedFiles.value.map((file) => currentPath.value + file.name));
+  deletePaths(selectedItems.value.map((file) => currentPath.value + file.name));
   isDeleting.value = false;
 }
 
+function createNewFolder() {
+  fetch("http://127.0.0.1:8000/modify/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "mode": "newFolder",
+    },
+    body: JSON.stringify({path: currentPath.value})
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error("There was an error while creating a new folder.");
+    }
+    return response.json();
+  }).then(response => {
+    updateItems().then(_ => {
+      selectedItems.value = [sortedItems.value[sortedItems.value.findIndex(f => f.name === response.name)]];
+      promptNewName();
+    });
+  });
+}
+
+function createNewFile() {
+  fetch("http://127.0.0.1:8000/modify/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "mode": "newFile",
+    },
+    body: JSON.stringify({path: currentPath.value})
+  }).then(response => {
+    if (!response.ok) {
+      throw new Error("There was an error while creating a new file.");
+    }
+    return response.json();
+  }).then(response => {
+    updateItems().then(_ => {
+      selectedItems.value = [sortedItems.value[sortedItems.value.findIndex(f => f.name === response.name)]];
+      promptNewName();
+    });
+  });
+}
+
 function cancelOperation() {
-  if (filesBeingCut.value.length !== 0) {
-    filesBeingCut.value = [];
+  if (itemsBeingCut.value.length !== 0) {
+    itemsBeingCut.value = [];
     clipboard.value = [];
   }
   if (isRenaming.value) {
     isRenaming.value = false;
-    fileNewName.value = "";
+    itemNewName.value = "";
   }
   if (isDeleting.value) {
     isDeleting.value = false;
@@ -563,7 +719,7 @@ const fileSizeUnits = {
   "PB": 1_000_000_000_000_000
 }
 
-function areFilesSame(a, b) {
+function areItemsSame(a, b) {
   return a.name === b.name && a.size === b.size && a.lastModified ===b.lastModified;
 }
 
@@ -580,7 +736,7 @@ function getFileSize(file) {
   }
 }
 
-function getFileLastModifiedDate(file) {
+function getItemLastModifiedDate(file) {
   const date = new Date(file.lastModified * 1000);
 
   const year = String(date.getFullYear());
@@ -594,7 +750,7 @@ function getFileLastModifiedDate(file) {
 
 }
 
-function getFileNameExtension(fileName) {
+function getItemNameExtension(fileName) {
   let i = fileName.lastIndexOf('.');
   if (i === -1) {
     return "";
@@ -602,12 +758,12 @@ function getFileNameExtension(fileName) {
   return fileName.slice(i + 1);
 }
 
-function getFileTypeDescription(file) {
+function getItemTypeDescription(file) {
   if (file.size === -1) {
     return "File Folder";
   }
 
-  let fileExtension = getFileNameExtension(file.name);
+  let fileExtension = getItemNameExtension(file.name);
   if (fileExtension in fileExtensionDescriptions) {
     return fileExtensionDescriptions[fileExtension];
   }
@@ -623,21 +779,21 @@ const currentPath = ref("");
 function changePath(file) {
   if (file.size === -1) {
     currentPath.value += file.name + '/';
-    updateFilesAndDirectories();
+    updateItems();
   }
   else {
     openFile(file);
   }
 }
 
-function getFileBorderRadius(file) {
-  if (selectedFiles.value.findIndex(f => areFilesSame(f, file)) === -1) {
+function getItemBorderRadius(file) {
+  if (selectedItems.value.findIndex(f => areItemsSame(f, file)) === -1) {
     return "25px 25px 25px 25px";
   }
 
-  let i = sortedFiles.value.findIndex(f => areFilesSame(f, file));
-  let doRoundTop = (i !== 0) ? selectedFiles.value.findIndex(f => areFilesSame(f, sortedFiles.value[i - 1])) === -1 : true;
-  let doRoundBottom = (i !== sortedFiles.value.length - 1) ? selectedFiles.value.findIndex(f => areFilesSame(f, sortedFiles.value[i + 1])) === -1 : true;
+  let i = sortedItems.value.findIndex(f => areItemsSame(f, file));
+  let doRoundTop = (i !== 0) ? selectedItems.value.findIndex(f => areItemsSame(f, sortedItems.value[i - 1])) === -1 : true;
+  let doRoundBottom = (i !== sortedItems.value.length - 1) ? selectedItems.value.findIndex(f => areItemsSame(f, sortedItems.value[i + 1])) === -1 : true;
 
   if (doRoundTop && doRoundBottom) {
     return "25px 25px 25px 25px";
@@ -667,7 +823,7 @@ function getPathLastFolder(path) {
 
 function setCurrentPath(path) {
   currentPath.value = path;
-  updateFilesAndDirectories();
+  updateItems();
 }
 
 function goBackDirectory() {

@@ -22,6 +22,9 @@ class RenameRequest(BaseModel):
 class DeleteRequest(BaseModel):
     paths: list[str]
 
+class NewItemRequest(BaseModel):
+    path: str
+
 class Server:
     @staticmethod
     def getDirectorySize(path: Path):
@@ -99,7 +102,7 @@ class Server:
             with open(filePath, "wb") as file:
                 file.write(await uploadedFile.read())
 
-            return {"filename": uploadedFile.filename}
+            return {"success": uploadedFile.filename}
 
         @self.app.get("/download/{requestedPath:path}")
         async def download(requestedPath: str):
@@ -143,7 +146,7 @@ class Server:
             ]
 
         @self.app.post("/modify/")
-        async def modify(request: CopyRequest | RenameRequest | DeleteRequest, mode: str = Header(...)):
+        async def modify(request: CopyRequest | RenameRequest | DeleteRequest | NewItemRequest, mode: str = Header(...)):
             match mode:
                 case "copy":
                     sourcePath = self.directory / request.source
@@ -158,6 +161,7 @@ class Server:
                                 shutil.copy(sourcePath, destinationPath)
                             elif sourcePath.is_dir():
                                 shutil.copytree(sourcePath, destinationPath)
+                            return {"name": destinationPath.name}
                         else:
                             return {"error": "Destination path does not exist or is not a directory"}
                     else:
@@ -167,14 +171,18 @@ class Server:
                     if len(request.newName) == 0:
                         return {"error": "New name must have a length greater than zero"}
 
-                    path = self.directory / request.path
+                    path: Path = self.directory / request.path
                     if path.exists():
-                        path.rename(path.with_name(request.newName))
+                        newPath = path.with_name(request.newName)
+                        if newPath.exists():
+                            return {"error": "There is already a file with that name in the directory"}
+                        path.rename(newPath)
+                        return {"success": newPath.as_posix()}
                     else:
                         return {"error": "Path does not exist"}
                     
                 case "delete":
-                    paths = [self.directory / path for path in request.paths]
+                    paths: list[Path] = [self.directory / path for path in request.paths]
                     for path in paths:
                         if path.exists():
                             if path.is_file():
@@ -183,6 +191,21 @@ class Server:
                                 shutil.rmtree(path)
                         else:
                             return {"error": "One of the specified paths does not exist"}
+                    return {"success": paths}
+                
+                case "newFolder":
+                    path = self.directory / request.path / "New Folder"
+                    while path.exists():
+                        path = path.with_stem(Server.getAlteredName(path.stem))
+                    path.mkdir()
+                    return {"name": path.name}
+
+                case "newFile":
+                    path = self.directory / request.path / "New File"
+                    while path.exists():
+                        path = path.with_stem(Server.getAlteredName(path.stem))
+                    path.touch()
+                    return {"name": path.name}
 
         self.app.mount(
             "/",
