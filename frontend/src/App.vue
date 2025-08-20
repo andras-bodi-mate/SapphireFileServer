@@ -21,7 +21,7 @@
         </v-btn>
       </div>
 
-      <v-progress-linear :active="isLoading" indeterminate rounded="pill" location="bottom" absolute></v-progress-linear>
+      <v-progress-linear :active="isZipping || isLoading" indeterminate rounded="pill" location="bottom" absolute></v-progress-linear>
     </v-app-bar>
 
     <!-- Sidebar + Content -->
@@ -72,10 +72,21 @@
           </v-breadcrumbs>
           <v-divider></v-divider>
           <div class="d-flex justify-space-between">
-            <div class="d-flex justify-start ga-2 pa-3">
-              <v-btn class="text-none" prepend-icon="mdi-arrow-left-top" variant="text" rounded="pill" tabindex="-1" :disabled="currentPath === ''" @click="goBackDirectory()">Go back</v-btn>
+            <div class="d-flex justify-start pa-3">
+              <v-btn class="text-none" prepend-icon="mdi-arrow-left-top" variant="text" rounded="pill" tabindex="-1"
+              :disabled="currentPath === ''" @click="goBackDirectory()">
+                Go back
+              </v-btn>
+              <v-tooltip text="Refresh" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" height="36" width="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  v-shortkey="['ctrl', 'r']" @shortkey="updateItems()" @click="updateItems()">
+                    <v-icon size="20">mdi-refresh</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
             </div>
-            <div class="d-flex justify-start ga-2 pa-3">
+            <div class="d-flex justify-start pa-3">
               <v-btn class="text-none" prepend-icon="mdi-folder-plus" variant="text" rounded="pill" tabindex="-1"
               @click="createNewFolder()" v-shortkey="['ctrl', 'shift', 'n']" @shortkey="createNewFolder()">
                 New Folder
@@ -85,38 +96,62 @@
                 New File
               </v-btn>
             </div>
-            <div class="d-flex justify-start ga-4 pa-3">
-              <v-btn height="36" width="36" icon="" variant="text" rounded="pill" tabindex="-1"
-              v-shortkey="['ctrl', 'x']" @shortkey="selectedItems.length !== 0 ? cutSelected() : 0"
-              @click="cutSelected()" :disabled="selectedItems.length === 0">
-                <v-icon size="20">mdi-content-cut</v-icon>
-              </v-btn>
-              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-              v-shortkey="['ctrl', 'c']" @shortkey="selectedItems.length !== 0 ? copySelected() : 0"
-              @click="copySelected()" :disabled="selectedItems.length === 0">
-                <v-icon size="20">mdi-content-copy</v-icon>
-              </v-btn>
-              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-              v-shortkey="['ctrl', 'v']" @shortkey="clipboard.length !== 0 ? pasteSelected() : 0"
-              @click="pasteSelected()" :disabled="clipboard.length === 0">
-                <v-icon size="20">mdi-content-paste</v-icon>
-              </v-btn>
-              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-              v-shortkey="['f2']" @shortkey="selectedItems.length === 1 ? promptNewName() : 0"
-              @click="promptNewName()" :disabled="selectedItems.length !== 1">
-                <v-icon size="20">mdi-form-textbox</v-icon>
-              </v-btn>
-              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-              v-shortkey="['del']" @shortkey="selectedItems.length !== 0 ? promptDelete() : 0"
-              @click="promptDelete()" :disabled="selectedItems.length === 0">
-                <v-icon size="20">mdi-delete</v-icon>
-              </v-btn>
-              <v-btn width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-              @click="promptShare()" :disabled="selectedItems.length === 0">
-                <v-icon size="20">mdi-export-variant</v-icon>
-              </v-btn>
+            <div class="d-flex justify-start ga-3 pa-3">
+              <v-tooltip text="Cut" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" height="36" width="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  v-shortkey="['ctrl', 'x']" @shortkey="selectedItems.length !== 0 ? cutSelected() : 0"
+                  @click="cutSelected()" :disabled="selectedItems.length === 0">
+                    <v-icon size="20">mdi-content-cut</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
+              <v-tooltip text="Copy" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  v-shortkey="['ctrl', 'c']" @shortkey="selectedItems.length !== 0 ? copySelected() : 0"
+                  @click="copySelected()" :disabled="selectedItems.length === 0">
+                    <v-icon size="20">mdi-content-copy</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
+              <v-tooltip text="Paste" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  v-shortkey="['ctrl', 'v']" @shortkey="clipboard.length !== 0 ? pasteSelected() : 0"
+                  @click="pasteSelected()" :disabled="clipboard.length === 0">
+                    <v-icon size="20">mdi-content-paste</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
+              <v-tooltip text="Rename" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  v-shortkey="['f2']" @shortkey="selectedItems.length === 1 ? promptNewName() : 0"
+                  @click="promptNewName()" :disabled="selectedItems.length !== 1">
+                    <v-icon size="20">mdi-form-textbox</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
+              <v-tooltip text="Delete" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  v-shortkey="['del']" @shortkey="selectedItems.length !== 0 ? promptDelete() : 0"
+                  @click="promptDelete()" :disabled="selectedItems.length === 0">
+                    <v-icon size="20">mdi-delete</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
+              <v-tooltip text="Export" location="bottom" transition="fade-transition" open-delay="750">
+                <template v-slot:activator="{ props }">
+                  <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
+                  @click="promptShare()" :disabled="selectedItems.length === 0">
+                    <v-icon size="20">mdi-export-variant</v-icon>
+                  </v-btn>
+                </template>
+              </v-tooltip>
             </div>
-            <div class="d-flex justify-start ga-2 pa-3">
+            <div class="d-flex justify-start pa-3">
               <v-btn class="text-none" prepend-icon="mdi-download" variant="text" rounded="pill" tabindex="-1"
               :disabled="selectedItems.length === 0" @click="downloadSelectedFiles()">
                 Download
@@ -128,7 +163,7 @@
           </div>
           <v-divider></v-divider>
           <v-list-item>
-            <div style="display: flex; justify-content: space-between; font-weight: normal;">
+            <div class="d-flex justify-space-between mt-2">
               <v-btn
                 class="text-none"
                 variant="text"
@@ -187,7 +222,19 @@
               </v-btn>
             </div>
           </v-list-item>
+          <v-banner
+          v-if="networkError"
+          class="justify-center text-deep-orange"
+          >
+            <v-icon class="mr-3" size="large">
+              mdi-alert
+            </v-icon>
+            <v-banner-text>
+              Couldn't reach server. This could be because the server is offline or due to bad internet connection.
+            </v-banner-text>
+          </v-banner>
           <v-list-item
+            v-else
             v-for="(file, index) in sortedItems"
             :key="index"
             :value="file"
@@ -200,8 +247,8 @@
               borderRadius: getItemBorderRadius(file) + ' !important',
               transition: 'border-radius 0.2s ease-in-out'
             }"
-            @click="delayedToggleFileSelected(file)"
-            @dblclick="changePath(file)"
+            @click="isLoading ? 0 : delayedToggleFileSelected(file)"
+            @dblclick="isLoading ? 0 : changePath(file)"
           >
             <div style="display: flex; width: 100%; align-items: center;">
               <div style="flex: 2; display: flex; align-items: center; gap: 8px;">
@@ -331,34 +378,44 @@ const isRenaming = ref(false);
 const itemNewName = ref("");
 const isDeleting = ref(false);
 
+const isZipping = ref(false);
 const isLoading = ref(false);
+const networkError = ref(false);
 
 function checkStoredTheme() {
   let themeCookie = VueCookies.get("app.themeCookie");
   if (themeCookie) {
-    theme.global.name.value = themeCookie;
+    theme.change(themeCookie);
   }
 }
 
 function switchTheme() {
-  theme.global.name.value = theme.global.name.value === "light" ? "dark" : "light";
-  VueCookies.set("app.themeCookie", theme.global.name.value, -1);
+  theme.toggle();
+  VueCookies.set("app.themeCookie", theme.current(), -1);
 }
 
 async function updateItems() {
   try {
+    isLoading.value = true;
     const response = await fetch("http://127.0.0.1:8000/files/" + currentPath.value);
     if (!response.ok) {
-      goBackDirectory();
+      setCurrentPath("");
+      isLoading.value = false;
+      networkError.value = true;
       return;
     }
     const data = await response.json();
     
+    networkError.value = false;
     filesAndDirectories.value = data;
     sortedItems.value = sortFiles();
     selectedItems.value = [];
+    isLoading.value = false;
+
   } catch (err) {
-    console.error('Failed to load files:', err);
+    setCurrentPath("");
+    isLoading.value = false;
+    networkError.value = true;
   }
 }
 
@@ -374,7 +431,7 @@ async function openFile(file) {
 }
 
 async function downloadSelectedFiles() {
-  isLoading.value = true;
+  isZipping.value = true;
   selectedItems.value.forEach( (file, i, array) => {
       fetch("http://127.0.0.1:8000/download/" + currentPath.value + file.name)
       .then(res => res.blob())
@@ -385,7 +442,7 @@ async function downloadSelectedFiles() {
         console.log("Blob created")
         link.href = url;
         link.download = file.name;
-        isLoading.value = false;
+        isZipping.value = false;
         link.click();
         URL.revokeObjectURL(url);
       })
@@ -827,6 +884,7 @@ function setCurrentPath(path) {
 }
 
 function goBackDirectory() {
+  console.log("before", currentPath.value);
   const pathParts = getPathParts();
   if (pathParts.length === 1) {
     setCurrentPath("");
@@ -834,6 +892,7 @@ function goBackDirectory() {
   else {
     setCurrentPath(pathParts[pathParts.length - 2]);
   }
+  console.log("after", currentPath.value);
 }
 
 </script>

@@ -2,6 +2,7 @@ from pathlib import Path
 import zipfile
 import tempfile
 import shutil
+from datetime import datetime
 
 from fastapi import FastAPI, Header, UploadFile
 from fastapi.responses import FileResponse
@@ -10,6 +11,11 @@ from pydantic import BaseModel
 
 from staticFiles import NoCacheStaticFiles
 from core import Core
+
+class SharedItem:
+    id: str
+    path: Path
+    expirationDate: datetime
 
 class CopyRequest(BaseModel):
     source: str
@@ -83,6 +89,8 @@ class Server:
         self.temporaryStorage = Path(tempfile.mkdtemp(prefix = "SapphireFileServer"))
 
         self.app = FastAPI()
+
+        self.sharedItems: list[SharedItem] = []
 
         self.app.add_middleware(
             CORSMiddleware,
@@ -206,6 +214,12 @@ class Server:
                         path = path.with_stem(Server.getAlteredName(path.stem))
                     path.touch()
                     return {"name": path.name}
+
+        @self.app.get("/file/{fileId}")
+        async def getFile(fileId):
+            for sharedItem in self.sharedItems:
+                if sharedItem.id == fileId and datetime.now() < sharedItem.expirationDate:
+                    return FileResponse(sharedItem.path)
 
         self.app.mount(
             "/",
