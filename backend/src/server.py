@@ -2,7 +2,10 @@ from pathlib import Path
 import zipfile
 import tempfile
 import shutil
-from datetime import datetime
+import random
+from base64 import b64encode
+from datetime import datetime, timedelta
+from dataclasses import dataclass
 
 from fastapi import FastAPI, Header, UploadFile
 from fastapi.responses import FileResponse
@@ -13,9 +16,17 @@ from staticFiles import NoCacheStaticFiles
 from core import Core
 
 class SharedItem:
-    id: str
-    path: Path
-    expirationDate: datetime
+    idLength = 64
+    customCharacters = b"-_"
+
+    @staticmethod
+    def generateNewId():
+        return b64encode(random.randbytes(SharedItem.idLength // 4), SharedItem.customCharacters).decode()
+
+    def __init__(self, path: Path, expirationDate: datetime):
+        self.id = SharedItem.generateNewId()
+        self.path = path
+        self.expirationDate = expirationDate
 
 class CopyRequest(BaseModel):
     source: str
@@ -30,6 +41,10 @@ class DeleteRequest(BaseModel):
 
 class NewItemRequest(BaseModel):
     path: str
+
+class SharingOptions(BaseModel):
+    path: str
+    expirationTime: int
 
 class Server:
     @staticmethod
@@ -94,13 +109,13 @@ class Server:
 
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=[
+            allow_origins = [
                 "http://localhost:8080",   # your Vite dev server
                 "http://127.0.0.1:8080",  # just in case
             ],
-            allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_credentials = True,
+            allow_methods = ["*"],
+            allow_headers = ["*"],
         )
 
         @self.app.post("/upload/")
@@ -220,6 +235,12 @@ class Server:
             for sharedItem in self.sharedItems:
                 if sharedItem.id == fileId and datetime.now() < sharedItem.expirationDate:
                     return FileResponse(sharedItem.path)
+
+        @self.app.post("/generateLink/")
+        async def generateLink(sharingOptions: SharingOptions):
+            newSharedItem = SharedItem(sharingOptions.path, datetime.now() + timedelta(seconds = sharingOptions.expirationTime))
+            self.sharedItems.append(newSharedItem)
+            return newSharedItem.id
 
         self.app.mount(
             "/",

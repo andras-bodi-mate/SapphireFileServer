@@ -48,7 +48,7 @@
     </v-navigation-drawer>
 
     <v-main>
-      <v-container style="height: 100%;" @click.self="selectedItems = []">
+      <v-container style="height: 100%;">
         <div v-shortkey="['ctrl', 'a']" @shortkey="isRenaming || isDeleting ? 0 : selectAll()" style="display: none"></div>
         <div v-shortkey="['ctrl', 'i']" @shortkey="isRenaming || isDeleting ? 0 : invertSelection()" style="display: none"></div>
         <div v-shortkey="['esc']" @shortkey="cancelOperation()" style="display: none"></div>
@@ -56,7 +56,7 @@
         <div v-shortkey="['shift', 'arrowdown']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(1)" style="display: none"></div>
         <div v-shortkey="['arrowup']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(-1)" style="display: none"></div>
         <div v-shortkey="['shift', 'arrowup']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(-1)" style="display: none"></div>
-        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl">
+        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl" v-click-outside="console.log('Clicked outside')">
           <div class="d-flex justify-center ps-4">
           </div>
           <v-breadcrumbs>
@@ -145,7 +145,7 @@
               <v-tooltip text="Export" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  @click="promptShare()" :disabled="selectedItems.length === 0">
+                  @click="promptShare()" :disabled="selectedItems.length !== 1">
                     <v-icon size="20">mdi-export-variant</v-icon>
                   </v-btn>
                 </template>
@@ -308,6 +308,36 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+      <v-dialog v-model="isSharing" max-width="550">
+        <v-card class="pa-6" rounded="xl" :title="`Sharing item`"
+        v-shortkey="['enter']" @shortkey="isSharing ? shareSelected() : 0"
+        >
+          <v-row class="justify-center ml-5 mr-5" :cols="2">
+            <v-col>
+              <v-radio-group v-model="expirationTime" label="Link expires in:">
+                <v-radio class="ms-5" label="1 Hour" :value="3600"></v-radio>
+                <v-radio class="ms-5" label="5 Hours" :value="18000"></v-radio>
+                <v-radio class="ms-5" label="1 Day" :value="86400"></v-radio>
+                <v-radio class="ms-5" label="1 Week" :value="604800"></v-radio>
+                <v-radio class="ms-5" label="Custom Time" :value="-1"></v-radio>
+              </v-radio-group>
+            </v-col>
+            <v-col class="mt-9" v-if="expirationTime === -1">
+              <v-number-input density="comfortable" v-model="customExpirationTimeDays" label="Days" controlVariant="stacked" variant="outlined" inset min="0"></v-number-input>
+              <v-number-input density="comfortable" v-model="customExpirationTimeHours" label="Hours" controlVariant="stacked" variant="outlined" inset min="0" max="23"></v-number-input>
+              <v-number-input density="comfortable" v-model="customExpirationTimeMinutes" label="Minutes" controlVariant="stacked" variant="outlined" inset min="0" max="59"></v-number-input>
+            </v-col>
+          </v-row>
+          <v-divider></v-divider>
+          <div class="d-flex justify-center mb-15 mt-5">
+            <v-btn width="150" class="text-none" variant="tonal" :loading="isGeneratingLink" @click="generateLink">Generate Link</v-btn>
+          </div>
+          <v-card-actions>
+            <v-btn @click="cancelOperation()">Cancel</v-btn>
+            <v-btn autofocus @click="shareSelected()" color="primary">Done</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </v-main>
   </v-app>
 </template>
@@ -377,6 +407,13 @@ const itemsBeingCut = ref([]);
 const isRenaming = ref(false);
 const itemNewName = ref("");
 const isDeleting = ref(false);
+const isSharing = ref(false);
+const expirationTime = ref(86400);
+const customExpirationTimeDays = ref(0);
+const customExpirationTimeHours = ref(0);
+const customExpirationTimeMinutes = ref(0);
+const isGeneratingLink = ref(false);
+const generatedLink = ref("");
 
 const isZipping = ref(false);
 const isLoading = ref(false);
@@ -673,7 +710,6 @@ function promptNewName() {
 }
 
 function renameSelected() {
-  isRenaming.value = false;
   fetch("http://127.0.0.1:8000/modify/", {
     method: "POST",
     headers: {
@@ -693,6 +729,7 @@ function renameSelected() {
     itemNewName.value = "";
     updateItems();
   });
+  isRenaming.value = false;
 }
 
 function promptDelete() {
@@ -746,6 +783,23 @@ function createNewFile() {
   });
 }
 
+function promptShare() {
+  isSharing.value = true;
+}
+
+function generateLink() {
+  isGeneratingLink.value = true;
+  fetch("http://127.0.0.1:8000/generateLink/", {
+    method: "POST",
+    body: JSON.stringify({path: currentPath.value + selectedItems.value[0].name, expirationTime: expirationTime.value})
+  }).then(response => {
+    isGeneratingLink.value = false;
+    if (!response.ok) {
+      throw new Error("There was an error while getting link for shared item.");
+    }
+  });
+}
+
 function cancelOperation() {
   if (itemsBeingCut.value.length !== 0) {
     itemsBeingCut.value = [];
@@ -757,6 +811,9 @@ function cancelOperation() {
   }
   if (isDeleting.value) {
     isDeleting.value = false;
+  }
+  if (isSharing.value) {
+    isSharing.value = false;
   }
 }
 
