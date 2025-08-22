@@ -14,5 +14,5 @@ const vuetify = createVuetify({
 
 createApp(App)
   .use(vuetify)
-  .use(shortkey)
+  .use(shortkey, {prevent: ["input", "textarea"]})
   .mount('#app')

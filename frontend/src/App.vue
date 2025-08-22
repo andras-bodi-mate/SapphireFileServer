@@ -49,13 +49,13 @@
 
     <v-main>
       <v-container style="height: 100%;">
-        <div v-shortkey="['ctrl', 'a']" @shortkey="isRenaming || isDeleting ? 0 : selectAll()" style="display: none"></div>
-        <div v-shortkey="['ctrl', 'i']" @shortkey="isRenaming || isDeleting ? 0 : invertSelection()" style="display: none"></div>
+        <div v-shortkey="['ctrl', 'a']" @shortkey="isDialogOpen() ? 0 : selectAll()" style="display: none"></div>
+        <div v-shortkey="['ctrl', 'i']" @shortkey="isDialogOpen() ? 0 : invertSelection()" style="display: none"></div>
         <div v-shortkey="['esc']" @shortkey="cancelOperation()" style="display: none"></div>
-        <div v-shortkey="['arrowdown']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(1)" style="display: none"></div>
-        <div v-shortkey="['shift', 'arrowdown']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(1)" style="display: none"></div>
-        <div v-shortkey="['arrowup']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(-1)" style="display: none"></div>
-        <div v-shortkey="['shift', 'arrowup']" @shortkey="isRenaming || isDeleting ? 0 : moveSelection(-1)" style="display: none"></div>
+        <div v-shortkey="['arrowdown']" @shortkey="isDialogOpen() ? 0 : moveSelection(1)" style="display: none"></div>
+        <div v-shortkey="['shift', 'arrowdown']" @shortkey="isDialogOpen() ? 0 : moveSelection(1)" style="display: none"></div>
+        <div v-shortkey="['arrowup']" @shortkey="isDialogOpen() ? 0 : moveSelection(-1)" style="display: none"></div>
+        <div v-shortkey="['shift', 'arrowup']" @shortkey="isDialogOpen() ? 0 : moveSelection(-1)" style="display: none"></div>
         <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl" v-click-outside="console.log('Clicked outside')">
           <div class="d-flex justify-center ps-4">
           </div>
@@ -74,13 +74,14 @@
           <div class="d-flex justify-space-between">
             <div class="d-flex justify-start pa-3">
               <v-btn class="text-none" prepend-icon="mdi-arrow-left-top" variant="text" rounded="pill" tabindex="-1"
+              v-shortkey="['backspace']" @shortkey="(isDialogOpen() || currentPath === '') ? 0 : goBackDirectory()"
               :disabled="currentPath === ''" @click="goBackDirectory()">
                 Go back
               </v-btn>
               <v-tooltip text="Refresh" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" height="36" width="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  v-shortkey="['ctrl', 'r']" @shortkey="updateItems()" @click="updateItems()">
+                  v-shortkey="['ctrl', 'r']" @shortkey="isDialogOpen() ? 0 : updateItems()" @click="updateItems()">
                     <v-icon size="20">mdi-refresh</v-icon>
                   </v-btn>
                 </template>
@@ -88,11 +89,11 @@
             </div>
             <div class="d-flex justify-start pa-3">
               <v-btn class="text-none" prepend-icon="mdi-folder-plus" variant="text" rounded="pill" tabindex="-1"
-              @click="createNewFolder()" v-shortkey="['ctrl', 'shift', 'n']" @shortkey="createNewFolder()">
+              @click="createNewFolder()" v-shortkey="['ctrl', 'shift', 'n']" @shortkey="isDialogOpen() ? 0 : createNewFolder()">
                 New Folder
               </v-btn>
               <v-btn class="text-none" prepend-icon="mdi-file-plus" variant="text" rounded="pill" tabindex="-1"
-              @click="createNewFile()" v-shortkey="['alt', 'n']" @shortkey="createNewFile()">
+              @click="createNewFile()" v-shortkey="['alt', 'n']" @shortkey="isDialogOpen() ? 0 : createNewFile()">
                 New File
               </v-btn>
             </div>
@@ -100,7 +101,7 @@
               <v-tooltip text="Cut" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" height="36" width="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  v-shortkey="['ctrl', 'x']" @shortkey="selectedItems.length !== 0 ? cutSelected() : 0"
+                  v-shortkey="['ctrl', 'x']" @shortkey="(!isDialogOpen() && selectedItems.length !== 0) ? cutSelected() : 0"
                   @click="cutSelected()" :disabled="selectedItems.length === 0">
                     <v-icon size="20">mdi-content-cut</v-icon>
                   </v-btn>
@@ -109,7 +110,7 @@
               <v-tooltip text="Copy" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  v-shortkey="['ctrl', 'c']" @shortkey="selectedItems.length !== 0 ? copySelected() : 0"
+                  v-shortkey="['ctrl', 'c']" @shortkey="(!isDialogOpen() && selectedItems.length !== 0) ? copySelected() : 0"
                   @click="copySelected()" :disabled="selectedItems.length === 0">
                     <v-icon size="20">mdi-content-copy</v-icon>
                   </v-btn>
@@ -118,7 +119,7 @@
               <v-tooltip text="Paste" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  v-shortkey="['ctrl', 'v']" @shortkey="clipboard.length !== 0 ? pasteSelected() : 0"
+                  v-shortkey="['ctrl', 'v']" @shortkey="(!isDialogOpen() && clipboard.length !== 0) ? pasteSelected() : 0"
                   @click="pasteSelected()" :disabled="clipboard.length === 0">
                     <v-icon size="20">mdi-content-paste</v-icon>
                   </v-btn>
@@ -127,7 +128,7 @@
               <v-tooltip text="Rename" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  v-shortkey="['f2']" @shortkey="selectedItems.length === 1 ? promptNewName() : 0"
+                  v-shortkey="['f2']" @shortkey="(!isDialogOpen() && selectedItems.length === 1) ? promptNewName() : 0"
                   @click="promptNewName()" :disabled="selectedItems.length !== 1">
                     <v-icon size="20">mdi-form-textbox</v-icon>
                   </v-btn>
@@ -136,13 +137,13 @@
               <v-tooltip text="Delete" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
-                  v-shortkey="['del']" @shortkey="selectedItems.length !== 0 ? promptDelete() : 0"
+                  v-shortkey="['del']" @shortkey="(!isDialogOpen() && selectedItems.length !== 0) ? promptDelete() : 0"
                   @click="promptDelete()" :disabled="selectedItems.length === 0">
                     <v-icon size="20">mdi-delete</v-icon>
                   </v-btn>
                 </template>
               </v-tooltip>
-              <v-tooltip text="Export" location="bottom" transition="fade-transition" open-delay="750">
+              <v-tooltip text="Share" location="bottom" transition="fade-transition" open-delay="750">
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
                   @click="promptShare()" :disabled="selectedItems.length !== 1">
@@ -315,30 +316,57 @@
           <v-row class="justify-center ml-5 mr-5" :cols="2">
             <v-col>
               <v-radio-group v-model="expirationTime" label="Link expires in:">
-                <v-radio class="ms-5" label="1 Hour" :value="3600"></v-radio>
-                <v-radio class="ms-5" label="5 Hours" :value="18000"></v-radio>
-                <v-radio class="ms-5" label="1 Day" :value="86400"></v-radio>
-                <v-radio class="ms-5" label="1 Week" :value="604800"></v-radio>
-                <v-radio class="ms-5" label="Custom Time" :value="-1"></v-radio>
+                <v-radio class="ms-5" label="1 Hour" :value="3600" @click="generatedLink = ''"></v-radio>
+                <v-radio class="ms-5" label="5 Hours" :value="18000" @click="generatedLink = ''"></v-radio>
+                <v-radio class="ms-5" label="1 Day" :value="86400" @click="generatedLink = ''"></v-radio>
+                <v-radio class="ms-5" label="1 Week" :value="604800" @click="generatedLink = ''"></v-radio>
+                <v-radio class="ms-5" label="Custom Time" :value="-1" @click="generatedLink = ''"></v-radio>
               </v-radio-group>
             </v-col>
             <v-col class="mt-9" v-if="expirationTime === -1">
-              <v-number-input density="comfortable" v-model="customExpirationTimeDays" label="Days" controlVariant="stacked" variant="outlined" inset min="0"></v-number-input>
-              <v-number-input density="comfortable" v-model="customExpirationTimeHours" label="Hours" controlVariant="stacked" variant="outlined" inset min="0" max="23"></v-number-input>
-              <v-number-input density="comfortable" v-model="customExpirationTimeMinutes" label="Minutes" controlVariant="stacked" variant="outlined" inset min="0" max="59"></v-number-input>
+              <v-number-input density="comfortable" v-model="customExpirationTimeDays" label="Days" controlVariant="stacked" variant="outlined" inset :min="0" @update:model-value="generatedLink = ''"></v-number-input>
+              <v-number-input density="comfortable" v-model="customExpirationTimeHours" label="Hours" controlVariant="stacked" variant="outlined" inset :min="0" :max="23" @update:model-value="generatedLink = ''"></v-number-input>
+              <v-number-input density="comfortable" v-model="customExpirationTimeMinutes" label="Minutes" controlVariant="stacked" variant="outlined" inset :min="0" :max="59" @update:model-value="generatedLink = ''"></v-number-input>
             </v-col>
           </v-row>
           <v-divider></v-divider>
-          <div class="d-flex justify-center mb-15 mt-5">
-            <v-btn width="150" class="text-none" variant="tonal" :loading="isGeneratingLink" @click="generateLink">Generate Link</v-btn>
+          <div v-if="generatedLink === ''" class="d-flex justify-center mb-15 mt-5">
+            <v-btn width="150" class="text-none" variant="tonal" :loading="isGeneratingLink" @click="generateLink()" :disabled="expirationTime === -1 && customExpirationTimeDays === 0 && customExpirationTimeHours === 0 && customExpirationTimeMinutes === 0">Generate Link</v-btn>
           </div>
+          <v-row v-else class="pa-5 pl-10 pr-10 justify-center">
+            <v-col cols="auto" class="d-flex align-center justify-end">
+              <v-btn class="text-none" variant="tonal" prepend-icon="mdi-link" rounded="pill" color="primary" @click="copyLink()">
+                Copy
+              </v-btn>
+            </v-col>
+
+            <v-col class="d-flex">
+              <v-text-field
+                v-model="generatedLink"
+                density="comfortable"
+                hide-details
+                readonly
+                class="flex-grow-1"
+              />
+            </v-col>
+          </v-row>
+
           <v-card-actions>
-            <v-btn @click="cancelOperation()">Cancel</v-btn>
-            <v-btn autofocus @click="shareSelected()" color="primary">Done</v-btn>
+            <v-btn v-if="generatedLink.length === 0" @click="cancelOperation()">Cancel</v-btn>
+            <v-btn autofocus @click="cancelOperation()" color="primary">Done</v-btn>
           </v-card-actions>
         </v-card>
       </v-dialog>
     </v-main>
+    <v-snackbar
+      v-model="linkCopied"
+      timeout="2000"
+      rounded="pill"
+      color="success"
+      class="d-flex justify-center"
+    >
+      Link successfully copied.
+    </v-snackbar>
   </v-app>
 </template>
 
@@ -414,6 +442,7 @@ const customExpirationTimeHours = ref(0);
 const customExpirationTimeMinutes = ref(0);
 const isGeneratingLink = ref(false);
 const generatedLink = ref("");
+const linkCopied = ref(false)
 
 const isZipping = ref(false);
 const isLoading = ref(false);
@@ -785,19 +814,40 @@ function createNewFile() {
 
 function promptShare() {
   isSharing.value = true;
+  generatedLink.value = "";
+}
+
+function isExpirationTimeCorrect(_ = 0) {
+  return !(expirationTime.value === -1 && customExpirationTimeDays.value === 0 && customExpirationTimeHours.value === 0 && customExpirationTimeMinutes.value === 0);
 }
 
 function generateLink() {
   isGeneratingLink.value = true;
-  fetch("http://127.0.0.1:8000/generateLink/", {
+  const actualExpirationTime = expirationTime.value !== -1 ? expirationTime.value : customExpirationTimeDays.value * 86400 + customExpirationTimeHours.value * 3600 + customExpirationTimeMinutes.value * 60;
+  fetch("http://127.0.0.1:8000/share/", {
     method: "POST",
-    body: JSON.stringify({path: currentPath.value + selectedItems.value[0].name, expirationTime: expirationTime.value})
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({path: currentPath.value + selectedItems.value[0].name, expirationTime: actualExpirationTime})
   }).then(response => {
     isGeneratingLink.value = false;
     if (!response.ok) {
       throw new Error("There was an error while getting link for shared item.");
     }
+    return response.json();
+  }).then(response => {
+    generatedLink.value = "http://127.0.0.1:8000/shared/" + response;
   });
+}
+
+function copyLink() {
+  navigator.clipboard.writeText(generatedLink.value);
+  linkCopied.value = true;
+}
+
+function isDialogOpen() {
+  return isRenaming.value || isDeleting.value || isSharing.value;
 }
 
 function cancelOperation() {

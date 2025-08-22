@@ -8,10 +8,11 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass
 
 from fastapi import FastAPI, Header, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from logger import Logger
 from staticFiles import NoCacheStaticFiles
 from core import Core
 
@@ -42,7 +43,7 @@ class DeleteRequest(BaseModel):
 class NewItemRequest(BaseModel):
     path: str
 
-class SharingOptions(BaseModel):
+class ItemShareRequest(BaseModel):
     path: str
     expirationTime: int
 
@@ -117,6 +118,8 @@ class Server:
             allow_methods = ["*"],
             allow_headers = ["*"],
         )
+
+        Logger.logInfo("Temporary storage location:", self.temporaryStorage.as_posix())
 
         @self.app.post("/upload/")
         async def uploadFile(uploadedFile: UploadFile):
@@ -230,22 +233,39 @@ class Server:
                     path.touch()
                     return {"name": path.name}
 
-        @self.app.get("/file/{fileId}")
-        async def getFile(fileId):
-            for sharedItem in self.sharedItems:
-                if sharedItem.id == fileId and datetime.now() < sharedItem.expirationDate:
-                    return FileResponse(sharedItem.path)
+        @self.app.get("/shared/{fileId}")
+        async def getShared(fileId):
+            now = datetime.now()
+            for sharedItemIndex, sharedItem in reversed(tuple(enumerate(self.sharedItems))):
+                if now < sharedItem.expirationDate:
+                    if sharedItem.id == fileId:
+                        if sharedItem.path.exists():
+                            return FileResponse(sharedItem.path, filename = sharedItem.path.name)
+                else:
+                    self.sharedItems.pop(sharedItemIndex)
 
-        @self.app.post("/generateLink/")
-        async def generateLink(sharingOptions: SharingOptions):
-            newSharedItem = SharedItem(sharingOptions.path, datetime.now() + timedelta(seconds = sharingOptions.expirationTime))
+            return HTMLResponse("<html><head><title>The shared item has expired</title/></head><body>The shared item has expired.</body></html>")
+
+        @self.app.post("/share/")
+        async def share(itemShareRequest: ItemShareRequest):
+            path = self.directory / itemShareRequest.path
+            if not path.exists():
+                return {"error": "Specified path does not exist"}
+            if path.is_dir():
+                archivePath = (self.temporaryStorage / "sharedDirectories" / itemShareRequest.path).with_suffix(".zip")
+                archivePath.parent.mkdir(parents = True, exist_ok = True)
+                with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
+                    Server.addDirectoryToArchive(archive, path)
+                path = archivePath
+
+            newSharedItem = SharedItem(path, datetime.now() + timedelta(seconds = itemShareRequest.expirationTime))
             self.sharedItems.append(newSharedItem)
             return newSharedItem.id
 
         self.app.mount(
             "/",
             NoCacheStaticFiles(
-                directory=Core.getPath("frontend/dist").as_posix(), html=True
+                directory = Core.getPath("frontend/dist").as_posix(), html = True
             ),
-            name="static",
+            name = "static",
         )

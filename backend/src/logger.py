@@ -12,21 +12,25 @@ class Logger:
         print(f"{callerFileName:<20} {message}")
 
     @staticmethod
-    def logDebug(message):
-        Logger.log(sty.fg.grey + message + sty.rs.all)
+    def getMessageFromValues(values):
+        return ' '.join(map(str, values))
 
     @staticmethod
-    def logInfo(message):
-        Logger.log(sty.fg.li_cyan + message + sty.rs.all)
+    def logDebug(*values):
+        Logger.log(sty.fg.grey + Logger.getMessageFromValues(values) + sty.rs.all)
 
     @staticmethod
-    def logWarning(message):
-        Logger.log(sty.fg.yellow + message + sty.rs.all)
+    def logInfo(*values):
+        Logger.log(sty.fg.li_cyan + Logger.getMessageFromValues(values) + sty.rs.all)
 
     @staticmethod
-    def logError(message):
-        Logger.log(sty.fg.red + sty.ef.bold + message + sty.rs.all)
+    def logWarning(*values):
+        Logger.log(sty.fg.yellow + Logger.getMessageFromValues(values) + sty.rs.all)
 
     @staticmethod
-    def logCriticalError(message):
-        Logger.log(sty.fg.magenta + sty.ef.bold + message + sty.rs.all)
+    def logError(*values):
+        Logger.log(sty.fg.red + sty.ef.bold + Logger.getMessageFromValues(values) + sty.rs.all)
+
+    @staticmethod
+    def logCriticalError(*values):
+        Logger.log(sty.fg.magenta + sty.ef.bold + Logger.getMessageFromValues(values) + sty.rs.all)
