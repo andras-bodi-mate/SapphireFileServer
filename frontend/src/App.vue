@@ -463,7 +463,7 @@ function switchTheme() {
 async function updateItems() {
   try {
     isLoading.value = true;
-    const response = await fetch("http://127.0.0.1:8000/files/" + currentPath.value);
+    const response = await fetch("/files/" + currentPath.value);
     if (!response.ok) {
       setCurrentPath("");
       isLoading.value = false;
@@ -486,7 +486,7 @@ async function updateItems() {
 }
 
 async function openFile(file) {
-  fetch("http://127.0.0.1:8000/download/" + currentPath.value + file.name)
+  fetch("/download/" + currentPath.value + file.name)
   .then(res => res.blob())
   .then(blob => {
     const url = URL.createObjectURL(blob);
@@ -499,7 +499,7 @@ async function openFile(file) {
 async function downloadSelectedFiles() {
   isZipping.value = true;
   selectedItems.value.forEach( (file, i, array) => {
-      fetch("http://127.0.0.1:8000/download/" + currentPath.value + file.name)
+      fetch("/download/" + currentPath.value + file.name)
       .then(res => res.blob())
       .then(blob => {
         const link = document.createElement('a');
@@ -659,7 +659,7 @@ function moveSelection(direction) {
 
 function deletePaths(paths) {
   console.log(paths);
-  fetch("http://127.0.0.1:8000/modify/", {
+  fetch("/modify/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -701,7 +701,7 @@ function pasteSelected() {
   let newSelectionNames = [];
   selectedItems.value = [];
   clipboard.value.forEach((path) => {
-    fetch("http://127.0.0.1:8000/modify/", {
+    fetch("/modify/", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -739,7 +739,7 @@ function promptNewName() {
 }
 
 function renameSelected() {
-  fetch("http://127.0.0.1:8000/modify/", {
+  fetch("/modify/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -771,7 +771,7 @@ function deleteSelected() {
 }
 
 function createNewFolder() {
-  fetch("http://127.0.0.1:8000/modify/", {
+  fetch("/modify/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -792,7 +792,7 @@ function createNewFolder() {
 }
 
 function createNewFile() {
-  fetch("http://127.0.0.1:8000/modify/", {
+  fetch("/modify/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -824,7 +824,7 @@ function isExpirationTimeCorrect(_ = 0) {
 function generateLink() {
   isGeneratingLink.value = true;
   const actualExpirationTime = expirationTime.value !== -1 ? expirationTime.value : customExpirationTimeDays.value * 86400 + customExpirationTimeHours.value * 3600 + customExpirationTimeMinutes.value * 60;
-  fetch("http://127.0.0.1:8000/share/", {
+  fetch("/share/", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
@@ -837,7 +837,7 @@ function generateLink() {
     }
     return response.json();
   }).then(response => {
-    generatedLink.value = "http://127.0.0.1:8000/shared/" + response;
+    generatedLink.value = "/shared/" + response;
   });
 }
 
