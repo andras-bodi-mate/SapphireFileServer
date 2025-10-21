@@ -203,7 +203,7 @@ class Server:
                         if newPath.exists():
                             return {"error": "There is already a file with that name in the directory"}
                         path.rename(newPath)
-                        return {"success": newPath.as_posix()}
+                        return {"newPath": newPath.relative_to(self.directory).as_posix()}
                     else:
                         return {"error": "Path does not exist"}
                     
@@ -217,7 +217,7 @@ class Server:
                                 shutil.rmtree(path)
                         else:
                             return {"error": "One of the specified paths does not exist"}
-                    return {"success": paths}
+                    return {"paths": paths}
                 
                 case "newFolder":
                     path = self.directory / request.path / "New Folder"
