@@ -250,6 +250,8 @@
             }"
             @click="isLoading ? 0 : delayedToggleFileSelected(file)"
             @dblclick="isLoading ? 0 : changePath(file)"
+            v-shortkey="['enter']"
+            @shortkey="(isLoading || selectedItems.length !== 1) ? 0 : changePath(selectedItems[0])"
           >
             <div style="display: flex; width: 100%; align-items: center;">
               <div style="flex: 2; display: flex; align-items: center; gap: 8px;">
@@ -426,7 +428,7 @@ const SortingModes = {
 const sortingOrder = ref(SortingOrders.Ascending);
 const sortingMode = ref(SortingModes.Name);
 
-const filesAndDirectories = ref([]);
+const items = ref([]);
 const sortedItems = ref([]);
 const itemRefs = ref({});
 const clipboard = ref([]);
@@ -473,7 +475,7 @@ async function updateItems() {
     const data = await response.json();
     
     networkError.value = false;
-    filesAndDirectories.value = data;
+    items.value = data;
     sortedItems.value = sortFiles();
     selectedItems.value = [];
     isLoading.value = false;
@@ -575,24 +577,24 @@ function sortFiles() {
   let sortingOrderMultipier = sortingOrder.value === SortingOrders.Ascending ? 1 : -1;
 
   switch (sortingMode.value) {
-    case SortingModes.Name: return [...(filesAndDirectories.value)].sort(
+    case SortingModes.Name: return [...(items.value)].sort(
       (a, b) => sortingOrderMultipier * compareFileNames(a.name, b.name)
     ).reduce((result, element) => {
       result[(element.size < 0) ? 0 : 1].push(element);
       return result;
     },
     [[], []]).flat();
-    case SortingModes.Type: return [...(filesAndDirectories.value)].sort(
+    case SortingModes.Type: return [...(items.value)].sort(
       (a, b) => {
         let fileExtensionA = getItemNameExtension(a.name);
         let fileExtensionB = getItemNameExtension(b.name);
         return sortingOrderMultipier * fileExtensionA.localeCompare(fileExtensionB);
       }
     );
-    case SortingModes.Size: return [...(filesAndDirectories.value)].sort(
+    case SortingModes.Size: return [...(items.value)].sort(
       (a, b) => sortingOrderMultipier * (a.size - b.size)
     );
-    case SortingModes.LastModified: return [...(filesAndDirectories.value)].sort(
+    case SortingModes.LastModified: return [...(items.value)].sort(
       (a, b) => sortingOrderMultipier * (a.lastModified - b.lastModified)
     );
   }
@@ -640,13 +642,28 @@ function moveSelection(direction) {
   if (keysDown.value.has("Control")) {
     return;
   }
-  let selectionEndIndex = getFileIndex(sortedItems.value, selectedItems.value[selectedItems.value.length - 1]);
-  if ((selectionEndIndex === 0 && direction === -1) || (selectionEndIndex === sortedItems.value.length - 1 && direction === 1)) {
-    return;
+  let doMoveSelection = true;
+  if (selectedItems.value.length == 0) {
+    selectedItems.value = [sortedItems.value[0]];
+    doMoveSelection = false;
   }
-  const newFile = sortedItems.value[selectionEndIndex + direction]
-  toggleFileSelected(newFile);
-  const fileScreenPosition = getFileScreenPosition(newFile);
+  else if (selectedItems.value.length != 1 && !keysDown.value.has("Shift")) {
+    selectedItems.value = [selectedItems.value[selectedItems.value.length - 1]];
+    doMoveSelection = false;
+  }
+  let selectionEndIndex = getFileIndex(sortedItems.value, selectedItems.value[selectedItems.value.length - 1]);
+
+  if ((selectionEndIndex === 0 && direction === -1) || (selectionEndIndex === sortedItems.value.length - 1 && direction === 1)) {
+    doMoveSelection = false;
+  }
+  
+  let file = selectedItems.value[selectedItems.value.length - 1];
+  if (doMoveSelection) {
+    file = sortedItems.value[selectionEndIndex + direction];
+    toggleFileSelected(file);
+  }
+
+  const fileScreenPosition = getFileScreenPosition(file);
   console.log("fileScreenPosition", fileScreenPosition);
   if (fileScreenPosition === 0) {
     return;

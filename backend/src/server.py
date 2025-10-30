@@ -1,19 +1,20 @@
-from pathlib import Path
 import zipfile
 import tempfile
 import shutil
 import random
-from base64 import b64encode
+import secrets
+import base64
+from pathlib import Path
 from datetime import datetime, timedelta
-from dataclasses import dataclass
 
-from fastapi import FastAPI, Header, UploadFile
+from fastapi import FastAPI, UploadFile, Request, Response, Header, Depends
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from logger import Logger
-from staticFiles import NoCacheStaticFiles
 from core import Core
 
 class SharedItem:
@@ -22,7 +23,7 @@ class SharedItem:
 
     @staticmethod
     def generateNewId():
-        return b64encode(random.randbytes(SharedItem.idLength // 4), SharedItem.customCharacters).decode()
+        return base64.b64encode(random.randbytes(SharedItem.idLength // 4), SharedItem.customCharacters).decode()
 
     def __init__(self, path: Path, expirationDate: datetime):
         self.id = SharedItem.generateNewId()
@@ -48,6 +49,9 @@ class ItemShareRequest(BaseModel):
     expirationTime: int
 
 class Server:
+    username = "felhasznalonev_az_admin"
+    password = "jelszo1234"
+
     @staticmethod
     def getDirectorySize(path: Path):
         size = 0
@@ -99,20 +103,25 @@ class Server:
         newIndex = int(originalName[previousIndexStart : -1]) + 1
         return f"{originalName[:previousIndexStart]}{newIndex})"
 
-    def __init__(self, directory: Path):
+    def __init__(self, directory: Path, frontendDirectory: Path):
+        if Core.projectDir.is_relative_to(directory) or Core.projectDir.is_relative_to(frontendDirectory):
+            raise ValueError("Cannot serve a directory that contains the server itself")
+        
         self.directory = directory
         self.directory.mkdir(parents = True, exist_ok = True)
+        self.frontendDirectory = frontendDirectory
         self.temporaryStorage = Path(tempfile.mkdtemp(prefix = "SapphireFileServer"))
 
         self.app = FastAPI()
+        self.security = HTTPBasic()
 
         self.sharedItems: list[SharedItem] = []
 
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins = [
-                "http://localhost:8080",   # your Vite dev server
-                "http://127.0.0.1:8080",  # just in case
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
             ],
             allow_credentials = True,
             allow_methods = ["*"],
@@ -120,10 +129,44 @@ class Server:
         )
 
         Logger.logInfo("Temporary storage location:", self.temporaryStorage.as_posix())
+        
+        @self.app.middleware("https")
+        async def basicAuthMiddleware(request: Request, callNext):
+            auth = request.headers.get("Authorization")
+
+            if not auth or not auth.startswith("Basic "):
+                return Response(
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="Restricted"'},
+                )
+
+            try:
+                encoded = auth.split(" ", 1)[1]
+                decoded = base64.b64decode(encoded).decode("utf-8")
+                username, password = decoded.split(":", 1)
+
+            except Exception:
+                return Response(
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="Restricted"'},
+                )
+
+            correctUsername = secrets.compare_digest(username, Server.username)
+            correctPassword = secrets.compare_digest(password, Server.password)
+
+            if not (correctUsername and correctPassword):
+                return Response(
+                    "Invalid credentials",
+                    status_code=401,
+                    headers={"WWW-Authenticate": 'Basic realm="Restricted"'},
+                )
+
+            # Continue if auth is valid
+            return await callNext(request)
 
         @self.app.post("/upload/")
         async def uploadFile(uploadedFile: UploadFile):
-            filePath = directory / uploadedFile.filename
+            filePath = (directory / uploadedFile.filename).resolve()
 
             with open(filePath, "wb") as file:
                 file.write(await uploadedFile.read())
@@ -132,7 +175,9 @@ class Server:
 
         @self.app.get("/download/{requestedPath:path}")
         async def download(requestedPath: str):
-            path = self.directory / requestedPath
+            path = (self.directory / requestedPath).resolve()
+            if not path.is_relative_to(self.directory):
+                return {"error": "Invalid path"}
 
             if not path.exists():
                 return {"error": "File not found"}
@@ -157,7 +202,9 @@ class Server:
         @self.app.get("/files/")
         @self.app.get("/files/{requestedPath:path}")
         async def getFiles(requestedPath: str = ""):
-            directoryPath = self.directory / requestedPath
+            directoryPath = (self.directory / requestedPath).resolve()
+            if not directoryPath.is_relative_to(self.directory):
+                return {"error": "Invalid path"}
             if not directoryPath.exists():
                 return {"error": "Directory doesn't exist"}
             
@@ -175,8 +222,11 @@ class Server:
         async def modify(request: CopyRequest | RenameRequest | DeleteRequest | NewItemRequest, mode: str = Header(...)):
             match mode:
                 case "copy":
-                    sourcePath = self.directory / request.source
-                    destinationPath: Path = self.directory / request.destination
+                    sourcePath = (self.directory / request.source).resolve()
+                    destinationPath: Path = (self.directory / request.destination).resolve()
+                    if not (sourcePath.is_relative_to(self.directory) and destinationPath.is_relative_to(self.directory)):
+                        return {"error": "Invalid path"}
+                    
                     if sourcePath.exists():
                         if destinationPath.exists() and destinationPath.is_dir():
                             destinationPath = destinationPath / sourcePath.name
@@ -196,8 +246,10 @@ class Server:
                 case "rename":
                     if len(request.newName) == 0:
                         return {"error": "New name must have a length greater than zero"}
+                    path: Path = (self.directory / request.path).resolve()
+                    if not path.is_relative_to(self.directory):
+                        return {"error": "Invalid path"}
 
-                    path: Path = self.directory / request.path
                     if path.exists():
                         newPath = path.with_name(request.newName)
                         if newPath.exists():
@@ -208,8 +260,11 @@ class Server:
                         return {"error": "Path does not exist"}
                     
                 case "delete":
-                    paths: list[Path] = [self.directory / path for path in request.paths]
+                    paths: list[Path] = [(self.directory / path).resolve() for path in request.paths]
                     for path in paths:
+                        if not path.is_relative_to(self.directory):
+                            return {"error": "Invalid path"}
+                        
                         if path.exists():
                             if path.is_file():
                                 path.unlink()
@@ -220,14 +275,20 @@ class Server:
                     return {"paths": paths}
                 
                 case "newFolder":
-                    path = self.directory / request.path / "New Folder"
+                    path = (self.directory / request.path / Path("New Folder")).resolve()
+                    if not path.is_relative_to(self.directory):
+                        return {"error": "Invalid path"}
+
                     while path.exists():
                         path = path.with_stem(Server.getAlteredName(path.stem))
                     path.mkdir()
                     return {"name": path.name}
 
                 case "newFile":
-                    path = self.directory / request.path / "New File"
+                    path = (self.directory / request.path / Path("New File")).resolve()
+                    if not path.is_relative_to(self.directory):
+                        return {"error": "Invalid path"}
+
                     while path.exists():
                         path = path.with_stem(Server.getAlteredName(path.stem))
                     path.touch()
@@ -262,10 +323,4 @@ class Server:
             self.sharedItems.append(newSharedItem)
             return newSharedItem.id
 
-        self.app.mount(
-            "/",
-            NoCacheStaticFiles(
-                directory = Core.getPath("frontend/dist").as_posix(), html = True
-            ),
-            name = "static",
-        )
+        self.app.mount("/", StaticFiles(directory = Core.getPath("frontend/dist"), html = True), name = "static")
