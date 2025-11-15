@@ -7,12 +7,15 @@ import base64
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, UploadFile, Request, Response, Header, Depends
+from fastapi import FastAPI, UploadFile, Request, Response, Header
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+from starlette.middleware.wsgi import WSGIMiddleware
+from wsgidav.wsgidav_app import WsgiDAVApp
+from wsgidav.fs_dav_provider import FilesystemProvider
 
 from logger import Logger
 from core import Core
@@ -49,8 +52,8 @@ class ItemShareRequest(BaseModel):
     expirationTime: int
 
 class Server:
-    username = "felhasznalonev_az_admin"
-    password = "jelszo1234"
+    username = "admin"
+    password = "jelszo"
 
     @staticmethod
     def getDirectorySize(path: Path):
@@ -114,6 +117,27 @@ class Server:
 
         self.app = FastAPI()
         self.security = HTTPBasic()
+        self.davApp = WsgiDAVApp(config = {
+            "provider_mapping": {
+                "/": FilesystemProvider(self.directory)
+            },
+            "http_authenticator": {
+                "domain_controller": None,
+                "accept_basic": False,
+                "accept_digest": False,
+                "accept_ntlm": False,
+                "default_to_digest": False,
+                "trusted_auth_header": None,
+            },
+            "simple_dc": {
+                "user_mapping": {}
+            },
+            "dir_browser": {
+                "enable": True,
+                "response_trailer": False,
+            },
+            "anonymous_access": False,
+        })
 
         self.sharedItems: list[SharedItem] = []
 
@@ -164,40 +188,40 @@ class Server:
             # Continue if auth is valid
             return await callNext(request)
 
-        @self.app.post("/upload/")
-        async def uploadFile(uploadedFile: UploadFile):
-            filePath = (directory / uploadedFile.filename).resolve()
+        # @self.app.post("/upload/")
+        # async def uploadFile(uploadedFile: UploadFile):
+        #     filePath = (directory / uploadedFile.filename).resolve()
 
-            with open(filePath, "wb") as file:
-                file.write(await uploadedFile.read())
+        #     with open(filePath, "wb") as file:
+        #         file.write(await uploadedFile.read())
 
-            return {"success": uploadedFile.filename}
+        #     return {"success": uploadedFile.filename}
 
-        @self.app.get("/download/{requestedPath:path}")
-        async def download(requestedPath: str):
-            path = (self.directory / requestedPath).resolve()
-            if not path.is_relative_to(self.directory):
-                return {"error": "Invalid path"}
+        # @self.app.get("/download/{requestedPath:path}")
+        # async def download(requestedPath: str):
+        #     path = (self.directory / requestedPath).resolve()
+        #     if not path.is_relative_to(self.directory):
+        #         return {"error": "Invalid path"}
 
-            if not path.exists():
-                return {"error": "File not found"}
+        #     if not path.exists():
+        #         return {"error": "File not found"}
             
-            if path.is_file():
-                if path.exists():
-                    return FileResponse(path)
-                else:
-                    return {"error": "File doesn't exist"}
+        #     if path.is_file():
+        #         if path.exists():
+        #             return FileResponse(path)
+        #         else:
+        #             return {"error": "File doesn't exist"}
                 
-            elif path.is_dir():
-                if path.exists():
-                    archivePath = (self.temporaryStorage / path.name).with_suffix(".zip")
-                    print("zipping...")
-                    with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
-                        Server.addDirectoryToArchive(archive, path)
-                    print("zipped")
-                    return FileResponse(archivePath)
-                else:
-                    return {"error": "Directory doesn't exist"}
+        #     elif path.is_dir():
+        #         if path.exists():
+        #             archivePath = (self.temporaryStorage / path.name).with_suffix(".zip")
+        #             print("zipping...")
+        #             with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
+        #                 Server.addDirectoryToArchive(archive, path)
+        #             print("zipped")
+        #             return FileResponse(archivePath)
+        #         else:
+        #             return {"error": "Directory doesn't exist"}
 
         @self.app.get("/files/")
         @self.app.get("/files/{requestedPath:path}")
@@ -323,4 +347,5 @@ class Server:
             self.sharedItems.append(newSharedItem)
             return newSharedItem.id
 
+        self.app.mount("/file", WSGIMiddleware(self.davApp))
         self.app.mount("/", StaticFiles(directory = Core.getPath("frontend/dist"), html = True), name = "static")

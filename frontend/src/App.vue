@@ -56,14 +56,14 @@
         <div v-shortkey="['shift', 'arrowdown']" @shortkey="isDialogOpen() ? 0 : moveSelection(1)" style="display: none"></div>
         <div v-shortkey="['arrowup']" @shortkey="isDialogOpen() ? 0 : moveSelection(-1)" style="display: none"></div>
         <div v-shortkey="['shift', 'arrowup']" @shortkey="isDialogOpen() ? 0 : moveSelection(-1)" style="display: none"></div>
-        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl" v-click-outside="console.log('Clicked outside')">
+        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl">
           <div class="d-flex justify-center ps-4">
           </div>
-          <v-breadcrumbs>
+          <v-breadcrumbs id="path">
             <v-btn width="30" height="30" icon="mdi-home" size="small" variant="text" tabindex="-1" @click="setCurrentPath('')">
             </v-btn>
             <v-breadcrumbs-divider v-if="currentPath !== ''"></v-breadcrumbs-divider>
-            <div v-for="pathPart in getPathParts()">
+            <div v-for="pathPart in getPathSubPaths()">
               <v-btn height="30" class="text-none" variant="text" rounded="pill" tabindex="-1" style="padding: 0 8px;" @click="setCurrentPath(pathPart)">
                 {{ getPathLastFolder(pathPart) }}
               </v-btn>
@@ -505,9 +505,7 @@ async function downloadSelectedFiles() {
       .then(res => res.blob())
       .then(blob => {
         const link = document.createElement('a');
-        console.log("Creating blob...")
         const url = URL.createObjectURL(blob);
-        console.log("Blob created")
         link.href = url;
         link.download = file.name;
         isZipping.value = false;
@@ -562,7 +560,6 @@ function getFileScreenPosition(file) {
 
   const element = component.$el;
 
-  console.log(element);
   const rect = element.getBoundingClientRect();
   if (rect.bottom < 0) {
     return -1;
@@ -664,7 +661,6 @@ function moveSelection(direction) {
   }
 
   const fileScreenPosition = getFileScreenPosition(file);
-  console.log("fileScreenPosition", fileScreenPosition);
   if (fileScreenPosition === 0) {
     return;
   }
@@ -675,7 +671,6 @@ function moveSelection(direction) {
 }
 
 function deletePaths(paths) {
-  console.log(paths);
   fetch("/modify/", {
     method: "POST",
     headers: {
@@ -988,7 +983,7 @@ function getItemBorderRadius(file) {
   return "0px 0px 0px 0px";
 }
 
-function getPathParts() {
+function getPathSubPaths() {
   let parts = [];
   let p = currentPath.value;
   while (p !== "") {
@@ -1008,15 +1003,13 @@ function setCurrentPath(path) {
 }
 
 function goBackDirectory() {
-  console.log("before", currentPath.value);
-  const pathParts = getPathParts();
+  const pathParts = getPathSubPaths();
   if (pathParts.length === 1) {
     setCurrentPath("");
   }
   else {
     setCurrentPath(pathParts[pathParts.length - 2]);
   }
-  console.log("after", currentPath.value);
 }
 
 </script>
