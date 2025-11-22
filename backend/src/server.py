@@ -2,20 +2,20 @@ import zipfile
 import tempfile
 import shutil
 import random
-import secrets
 import base64
 from pathlib import Path
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI, UploadFile, Request, Response, Header
+from fastapi import FastAPI, Header
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBasic
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import HTTPException
 from pydantic import BaseModel
 from starlette.middleware.wsgi import WSGIMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp
 from wsgidav.fs_dav_provider import FilesystemProvider
+from tuspyserver import create_tus_router
 
 from logger import Logger
 from core import Core
@@ -52,9 +52,6 @@ class ItemShareRequest(BaseModel):
     expirationTime: int
 
 class Server:
-    username = "admin"
-    password = "jelszo"
-
     @staticmethod
     def getDirectorySize(path: Path):
         size = 0
@@ -113,115 +110,78 @@ class Server:
         self.directory = directory
         self.directory.mkdir(parents = True, exist_ok = True)
         self.frontendDirectory = frontendDirectory
-        self.temporaryStorage = Path(tempfile.mkdtemp(prefix = "SapphireFileServer"))
+        self.temporaryStorageDirectory = Path(tempfile.mkdtemp(prefix = "SapphireFileServer"))
+        self.tusDirectory = self.temporaryStorageDirectory / Path("Tus")
+        self.tusLocksDirectory = self.tusDirectory / Path(".locks")
 
-        self.app = FastAPI()
-        self.security = HTTPBasic()
+        self.app = FastAPI(lifespan = self.lifespan)
         self.davApp = WsgiDAVApp(config = {
+            "mount_path": "/file",
             "provider_mapping": {
                 "/": FilesystemProvider(self.directory)
             },
-            "http_authenticator": {
-                "domain_controller": None,
-                "accept_basic": False,
-                "accept_digest": False,
-                "accept_ntlm": False,
-                "default_to_digest": False,
-                "trusted_auth_header": None,
-            },
             "simple_dc": {
-                "user_mapping": {}
+                "user_mapping": {
+                    "*": {
+                        "admin": {
+                            "password": "jelszo"
+                        }
+                    }
+                }
             },
             "dir_browser": {
                 "enable": True,
                 "response_trailer": False,
             },
-            "anonymous_access": False,
+            "anonymous_access": True,
         })
 
         self.sharedItems: list[SharedItem] = []
 
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins = [
-                "http://localhost:8080",
-                "http://127.0.0.1:8080",
-            ],
-            allow_credentials = True,
+            allow_origins = ["*"],
             allow_methods = ["*"],
             allow_headers = ["*"],
+            expose_headers = [
+                "Location",
+                "Upload-Offset",
+                "Tus-Resumable",
+                "Tus-Version",
+                "Tus-Extension",
+                "Tus-Max-Size",
+                "Upload-Expires",
+                "Upload-Length",
+            ],
         )
 
-        Logger.logInfo("Temporary storage location:", self.temporaryStorage.as_posix())
-        
-        @self.app.middleware("https")
-        async def basicAuthMiddleware(request: Request, callNext):
-            auth = request.headers.get("Authorization")
+        Logger.logInfo("Temporary storage location:", self.temporaryStorageDirectory.as_posix())
 
-            if not auth or not auth.startswith("Basic "):
-                return Response(
-                    status_code=401,
-                    headers={"WWW-Authenticate": 'Basic realm="Restricted"'},
-                )
+        @self.app.get("/download/{requestedPath:path}")
+        async def download(requestedPath: str):
+            path = (self.directory / requestedPath).resolve()
+            if not path.is_relative_to(self.directory):
+                return {"error": "Invalid path"}
 
-            try:
-                encoded = auth.split(" ", 1)[1]
-                decoded = base64.b64decode(encoded).decode("utf-8")
-                username, password = decoded.split(":", 1)
-
-            except Exception:
-                return Response(
-                    status_code=401,
-                    headers={"WWW-Authenticate": 'Basic realm="Restricted"'},
-                )
-
-            correctUsername = secrets.compare_digest(username, Server.username)
-            correctPassword = secrets.compare_digest(password, Server.password)
-
-            if not (correctUsername and correctPassword):
-                return Response(
-                    "Invalid credentials",
-                    status_code=401,
-                    headers={"WWW-Authenticate": 'Basic realm="Restricted"'},
-                )
-
-            # Continue if auth is valid
-            return await callNext(request)
-
-        # @self.app.post("/upload/")
-        # async def uploadFile(uploadedFile: UploadFile):
-        #     filePath = (directory / uploadedFile.filename).resolve()
-
-        #     with open(filePath, "wb") as file:
-        #         file.write(await uploadedFile.read())
-
-        #     return {"success": uploadedFile.filename}
-
-        # @self.app.get("/download/{requestedPath:path}")
-        # async def download(requestedPath: str):
-        #     path = (self.directory / requestedPath).resolve()
-        #     if not path.is_relative_to(self.directory):
-        #         return {"error": "Invalid path"}
-
-        #     if not path.exists():
-        #         return {"error": "File not found"}
+            if not path.exists():
+                return {"error": "File not found"}
             
-        #     if path.is_file():
-        #         if path.exists():
-        #             return FileResponse(path)
-        #         else:
-        #             return {"error": "File doesn't exist"}
+            if path.is_file():
+                if path.exists():
+                    return FileResponse(path)
+                else:
+                    return {"error": "File doesn't exist"}
                 
-        #     elif path.is_dir():
-        #         if path.exists():
-        #             archivePath = (self.temporaryStorage / path.name).with_suffix(".zip")
-        #             print("zipping...")
-        #             with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
-        #                 Server.addDirectoryToArchive(archive, path)
-        #             print("zipped")
-        #             return FileResponse(archivePath)
-        #         else:
-        #             return {"error": "Directory doesn't exist"}
+            elif path.is_dir():
+                if path.exists():
+                    archivePath = (self.temporaryStorage / path.name).with_suffix(".zip")
+                    print("zipping...")
+                    with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
+                        Server.addDirectoryToArchive(archive, path)
+                    print("zipped")
+                    return FileResponse(archivePath)
+                else:
+                    return {"error": "Directory doesn't exist"}
 
         @self.app.get("/files/")
         @self.app.get("/files/{requestedPath:path}")
@@ -337,7 +297,7 @@ class Server:
             if not path.exists():
                 return {"error": "Specified path does not exist"}
             if path.is_dir():
-                archivePath = (self.temporaryStorage / "sharedDirectories" / itemShareRequest.path).with_suffix(".zip")
+                archivePath = (self.temporaryStorageDirectory / "sharedDirectories" / itemShareRequest.path).with_suffix(".zip")
                 archivePath.parent.mkdir(parents = True, exist_ok = True)
                 with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
                     Server.addDirectoryToArchive(archive, path)
@@ -347,5 +307,32 @@ class Server:
             self.sharedItems.append(newSharedItem)
             return newSharedItem.id
 
-        self.app.mount("/file", WSGIMiddleware(self.davApp))
+        def validateUpload(metadata: dict, uploadInfo: dict):
+            if "filename" not in metadata or "directory" not in metadata:
+                raise HTTPException(status_code = 400, detail = "Filename or directory is missing")
+            
+        def finishUpload(filePathStr: str, metadata: dict):
+            print("Upload complete")
+            print(filePathStr)
+            print(metadata)
+            filePath = Path(filePathStr)
+            infoFile = filePath.with_suffix(".info")
+            infoFile.unlink(missing_ok = True)
+            filePath.rename(self.directory / metadata["directory"] / metadata["filename"])
+            if self.tusLocksDirectory.exists() and len(list(self.tusLocksDirectory.iterdir())) == 0:
+               self.tusLocksDirectory.rmdir()
+
+        self.app.include_router(
+            create_tus_router(
+                prefix = "upload",
+                files_dir = self.tusDirectory.as_posix(),
+                pre_create_hook = validateUpload,
+                on_upload_complete = finishUpload,
+            )
+        )
+        self.app.mount("/webdav", WSGIMiddleware(self.davApp))
         self.app.mount("/", StaticFiles(directory = Core.getPath("frontend/dist"), html = True), name = "static")
+
+    def lifespan(self, app: FastAPI):
+        yield
+        shutil.rmtree(self.temporaryStorageDirectory)

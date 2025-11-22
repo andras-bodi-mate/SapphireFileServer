@@ -1,6 +1,5 @@
 <template>
   <v-app>
-    <!-- Header -->
     <v-app-bar :color="theme.global.name.value === 'light' ? 'primary' : 'grey-darken-3'" app>
       <v-btn icon variant="plain" :ripple="false" href="http://localhost:5173/">
         <img
@@ -24,13 +23,9 @@
       <v-progress-linear :active="isZipping || isLoading" indeterminate rounded="pill" location="bottom" absolute></v-progress-linear>
     </v-app-bar>
 
-    <!-- Sidebar + Content -->
-    <v-navigation-drawer app v-model="drawer">
-      <v-app-bar-nav-icon @click="drawer = !drawer"></v-app-bar-nav-icon>
-      
-      <v-divider></v-divider>
-
+    <v-navigation-drawer app v-model="drawer" :rail="rail" permanent @click="rail = false">
       <v-list :lines="false" density="compact" nav>
+        <v-btn  class="mb-2" size="small" :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'" variant="text" @click.stop="rail = !rail"></v-btn>
         <v-list-item
           v-for="(item, i) in navigationDrawerMenus"
           :key="i"
@@ -56,7 +51,7 @@
         <div v-shortkey="['shift', 'arrowdown']" @shortkey="isDialogOpen() ? 0 : moveSelection(1)" style="display: none"></div>
         <div v-shortkey="['arrowup']" @shortkey="isDialogOpen() ? 0 : moveSelection(-1)" style="display: none"></div>
         <div v-shortkey="['shift', 'arrowup']" @shortkey="isDialogOpen() ? 0 : moveSelection(-1)" style="display: none"></div>
-        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4" style="user-select: none;" rounded="xl">
+        <v-list v-if="currentPage === Pages.MyFiles" class="pa-4 elevation-5" style="user-select: none;" rounded="xl">
           <div class="d-flex justify-center ps-4">
           </div>
           <v-breadcrumbs id="path">
@@ -157,70 +152,81 @@
               :disabled="selectedItems.length === 0" @click="downloadSelectedFiles()">
                 Download
               </v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-upload" variant="text" rounded="pill" tabindex="-1">
+              <v-btn class="text-none" prepend-icon="mdi-upload" variant="text" rounded="pill" tabindex="-1"
+              @click="uploadFiles()">
                 Upload
               </v-btn>
             </div>
           </div>
           <v-divider></v-divider>
           <v-list-item>
-            <div class="d-flex justify-space-between mt-2">
-              <v-btn
-                class="text-none"
-                variant="text"
-                rounded="pill" 
-                tabindex="-1"
-                @click="
-                delayedChangeSorting(SortingModes.Name);
-                "
-              >
-                File Name
-                <v-icon>
-                  {{ getSortingIcon(SortingModes.Name) }}
-                </v-icon>
-              </v-btn>
-              <v-btn
-                class="text-none"
-                variant="text"
-                rounded="pill"
-                tabindex="-1"
-                @click="
-                delayedChangeSorting(SortingModes.Type);
-                "
-              >
-                Type
-                <v-icon>
-                  {{ getSortingIcon(SortingModes.Type) }}
-                </v-icon>
-              </v-btn>
-              <v-btn
-                class="text-none"
-                variant="text"
-                rounded="pill"
-                tabindex="-1"
-                @click="
-                delayedChangeSorting(SortingModes.Size);
-                "
-              >
-                Size
-                <v-icon>
-                  {{ getSortingIcon(SortingModes.Size) }}
-                </v-icon>
-              </v-btn>
-              <v-btn
-                class="text-none"
-                variant="text"
-                rounded="pill"
-                tabindex="-1"
-                @click="
-                delayedChangeSorting(SortingModes.LastModified);
-                "
-              >
-                Last Modified
-                <v-icon>
-                  {{ getSortingIcon(SortingModes.LastModified) }}
-                </v-icon>
-              </v-btn>
+            <div class="d-flex justify-start mt-2">
+              <span style="flex: 2;">
+                <v-btn
+                  class="text-none"
+                  variant="text"
+                  rounded="pill" 
+                  tabindex="-1"
+                  @click="
+                  delayedChangeSorting(SortingModes.Name);
+                  "
+                >
+                  File Name
+                  <v-icon>
+                    {{ getSortingIcon(SortingModes.Name) }}
+                  </v-icon>
+                </v-btn>
+              </span>
+              <span style="flex: 1;">
+                <v-btn
+                  class="text-none"
+                  variant="text"
+                  rounded="pill"
+                  tabindex="-1"
+                  @click="
+                  delayedChangeSorting(SortingModes.Type);
+                  "
+                >
+                  Type
+                  <v-icon>
+                    {{ getSortingIcon(SortingModes.Type) }}
+                  </v-icon>
+                </v-btn>
+              </span>
+              <span style="flex: 1;">
+                <v-btn
+                  class="text-none"
+                  variant="text"
+                  rounded="pill"
+                  tabindex="-1"
+                  style="flex: 1;"
+                  @click="
+                  delayedChangeSorting(SortingModes.Size);
+                  "
+                >
+                  Size
+                  <v-icon>
+                    {{ getSortingIcon(SortingModes.Size) }}
+                  </v-icon>
+                </v-btn>
+              </span>
+              <span style="flex: 1;">
+                <v-btn
+                  class="text-none"
+                  variant="text"
+                  rounded="pill"
+                  tabindex="-1"
+                  style="flex: 1;"
+                  @click="
+                  delayedChangeSorting(SortingModes.LastModified);
+                  "
+                >
+                  Last Modified
+                  <v-icon>
+                    {{ getSortingIcon(SortingModes.LastModified) }}
+                  </v-icon> 
+                </v-btn>
+              </span>
             </div>
           </v-list-item>
           <v-banner
@@ -251,7 +257,7 @@
             @click="isLoading ? 0 : delayedToggleFileSelected(file)"
             @dblclick="isLoading ? 0 : changePath(file)"
             v-shortkey="['enter']"
-            @shortkey="(isLoading || selectedItems.length !== 1) ? 0 : changePath(selectedItems[0])"
+            @shortkey="(isLoading || selectedItems.length !== 1 || isDialogOpen()) ? 0 : changePath(selectedItems[0])"
           >
             <div style="display: flex; width: 100%; align-items: center;">
               <div style="flex: 2; display: flex; align-items: center; gap: 8px;">
@@ -273,10 +279,39 @@
             </div>
           </v-list-item>
         </v-list>
-        <div class="pa-3" style="position: fixed; bottom: 0; right: 0px;">
-          <p>
-            {{ `${selectedItems.length} / ${sortedItems.length} items selected` }}
-          </p>
+        <div class="d-flex flex-column align-end justify-end ma-5" style="position: fixed; bottom: 0px; right: 0px;">
+          <div class="pa-3">            
+            <p>
+              {{ `${selectedItems.length} / ${sortedItems.length} items selected` }}
+            </p>
+          </div>
+          <v-list class="pa-3 elevation-5" rounded="xl" style="max-height: 500px;" v-if="itemsBeingUploadedInfo.length !== 0">
+            <div class="d-flex ma-3 justify-space-between align-center ga-10">
+              <p size="x-large">{{ `Uploading ${itemsBeingUploadedInfo.length} items` }}</p>
+              <v-btn icon="mdi-close" variant="text"></v-btn>
+            </div>
+            <v-divider></v-divider>
+            <div class="d-flex ma-3 align-center">
+              <p>{{ `${uploadRemainingSeconds >= 3600 ? `${Math.floor(uploadRemainingSeconds / 3600)} hours ` : ''}${uploadRemainingSeconds >= 60 ? `${Math.floor(uploadRemainingSeconds / 60) % 60} minutes ` : ''}${uploadRemainingSeconds < 3600 ? `and ${uploadRemainingSeconds % 60} seconds` : ''} left...` }}</p>
+            </div>
+            <v-divider></v-divider>
+            <div v-for="itemInfo in itemsBeingUploadedInfo" class="d-flex ma-3 align-center justify-space-between">
+              <div class="d-flex ga-3">
+                <v-icon>{{ getFileIcon(itemInfo) }}</v-icon>
+                <p>{{ itemInfo.name }}</p>
+              </div>
+              <v-hover>
+                <template v-slot:default="{ isHovering }">
+                  <v-btn :loading="!isHovering" variant="text">
+                    <template v-slot:loader>
+                      <v-progress-circular :indeterminate="itemInfo.progress === -1" :model-value="itemInfo.progress"></v-progress-circular>
+                    </template>
+                    {{ isHovering }}
+                  </v-btn>
+                </template>
+              </v-hover>
+            </div>
+          </v-list>
         </div>
       </v-container>
       <v-dialog v-model="isRenaming" max-width="500">
@@ -333,7 +368,7 @@
           </v-row>
           <v-divider></v-divider>
           <div v-if="generatedLink === ''" class="d-flex justify-center mb-15 mt-5">
-            <v-btn width="150" class="text-none" variant="tonal" :loading="isGeneratingLink" @click="generateLink()" :disabled="expirationTime === -1 && customExpirationTimeDays === 0 && customExpirationTimeHours === 0 && customExpirationTimeMinutes === 0">Generate Link</v-btn>
+            <v-btn width="150" class="text-none" variant="tonal" :loading="isGeneratingLink" @click="generateLink()" :disabled="!isExpirationTimeCorrect()">Generate Link</v-btn>
           </div>
           <v-row v-else class="pa-5 pl-10 pr-10 justify-center">
             <v-col cols="auto" class="d-flex align-center justify-end">
@@ -373,12 +408,12 @@
 </template>
 
 <script setup>
-import { ref, toRaw, onMounted, onBeforeUnmount } from 'vue';
+import { ref, toRaw, onMounted, onBeforeUnmount, reactive } from 'vue';
 import { useTheme } from 'vuetify';
-
 import VueCookies from 'vue-cookies'
-
 import { getFileIcon, fileExtensionDescriptions } from "./fileIcons.js";
+import { Upload } from 'tus-js-client';
+import { lookup } from 'mime-types';
 
 const theme = useTheme()
 
@@ -407,11 +442,12 @@ onBeforeUnmount(() => {
 const Pages = {
   MyFiles: 0,
   Recent: 1,
-  Prex: 2,
+  Plex: 2,
   Backups: 3
 };
 
 const currentPage = ref(Pages.MyFiles);
+const rail = ref(true);
 
 const SortingOrders = {
   Ascending: 1,
@@ -445,22 +481,25 @@ const customExpirationTimeMinutes = ref(0);
 const isGeneratingLink = ref(false);
 const generatedLink = ref("");
 const linkCopied = ref(false)
-
+const itemsBeingUploadedInfo = ref([]);
+const uploadedItems = ref([]);
+const uploadRemainingSeconds = ref(0);
 const isZipping = ref(false);
 const isLoading = ref(false);
 const networkError = ref(false);
 
+function switchTheme() {
+  theme.toggle();
+  VueCookies.set("app.themeCookie", theme.current.value.dark);
+}
+
 function checkStoredTheme() {
   let themeCookie = VueCookies.get("app.themeCookie");
-  if (themeCookie) {
-    theme.change(themeCookie);
+  if (theme.current.value.dark.toString() !== themeCookie) {
+    switchTheme();
   }
 }
 
-function switchTheme() {
-  theme.toggle();
-  VueCookies.set("app.themeCookie", theme.current(), -1);
-}
 
 async function updateItems() {
   try {
@@ -488,7 +527,7 @@ async function updateItems() {
 }
 
 async function openFile(file) {
-  fetch("/download/" + currentPath.value + file.name)
+  fetch("/file/" + currentPath.value + file.name)
   .then(res => res.blob())
   .then(blob => {
     const url = URL.createObjectURL(blob);
@@ -501,7 +540,7 @@ async function openFile(file) {
 async function downloadSelectedFiles() {
   isZipping.value = true;
   selectedItems.value.forEach( (file, i, array) => {
-      fetch("/download/" + currentPath.value + file.name)
+      fetch("/file/" + currentPath.value + file.name)
       .then(res => res.blob())
       .then(blob => {
         const link = document.createElement('a');
@@ -514,6 +553,73 @@ async function downloadSelectedFiles() {
       })
     }
   )
+}
+
+async function uploadFiles() {
+  uploadRemainingSeconds.value = 70;
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.multiple = true;
+  input.onchange = async e => {    
+    const uploads = [];
+    let lastItemUpdate = 0;
+
+    for (const file of input.files) {
+      let itemInfo = reactive({
+        name: file.name,
+        size: file.size,
+        progress: -1
+      });
+      itemsBeingUploadedInfo.value.push(itemInfo);
+
+      console.log("itemsBeingUploadedInfo:", itemsBeingUploadedInfo.value);
+
+      uploads.push(
+          new Upload(file, {
+            endpoint: "/upload/",
+            retryDelays: [0, 1000, 2000, 3000, 4000],
+            uploadStalledRetryDelay: 0,
+            chunkSize: 16 * 1024 * 1024,
+            metadata: {
+              filename: file.name,
+              filetype: lookup(file.name),
+              directory: currentPath.value,
+            },
+            onError: function (error) {
+              console.log('Failed because: ' + error)
+            },
+            onProgress: function (bytesUploaded, bytesTotal) {
+              var percentage = (bytesUploaded / bytesTotal) * 100;
+              console.log(bytesUploaded, bytesTotal, percentage.toFixed(2) + '%');
+              itemInfo.progress = percentage;
+            },
+            onSuccess: function () {
+              uploadedItems.value.push(itemInfo);
+              let now = Date.now();
+              if (now - lastItemUpdate > 1000) {
+                updateItems();
+                lastItemUpdate = now;
+              }
+              itemsBeingUploadedInfo.value.splice(itemsBeingUploadedInfo.value.indexOf(itemInfo), 1);
+            },
+          })
+      );
+    }
+
+    for (const upload of uploads) {
+      // Check if there are any previous uploads to continue.
+      upload.findPreviousUploads().then(function (previousUploads) {
+        // Found previous uploads so we select the first one.
+        if (previousUploads.length) {
+          upload.resumeFromPreviousUpload(previousUploads[0]);
+        }
+  
+        // Start the upload
+        upload.start();
+      });
+    }
+  };
+  input.click();
 }
 
 function changeSorting(newMode) {
@@ -849,13 +955,14 @@ function generateLink() {
     }
     return response.json();
   }).then(response => {
-    generatedLink.value = "/shared/" + response;
+    generatedLink.value = "bodi.homelinuxserver.org/shared/" + response;
   });
 }
 
 function copyLink() {
-  navigator.clipboard.writeText(generatedLink.value);
-  linkCopied.value = true;
+  navigator.clipboard.writeText(generatedLink.value).then(result => {
+    linkCopied.value = true;
+  });
 }
 
 function isDialogOpen() {

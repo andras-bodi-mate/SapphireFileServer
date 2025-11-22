@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 
 [[package]]
@@ -32,6 +32,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "fastapi", extra = ["standard"] },
     { name = "sty" },
+    { name = "tuspyserver" },
     { name = "uvicorn" },
     { name = "wsgidav" },
 ]
@@ -40,6 +41,7 @@ dependencies = [
 requires-dist = [
     { name = "fastapi", extras = ["standard"], specifier = ">=0.116.1" },
     { name = "sty", specifier = ">=1.0.6" },
+    { name = "tuspyserver", specifier = ">=4.2.3" },
     { name = "uvicorn", specifier = ">=0.35.0" },
     { name = "wsgidav", specifier = ">=4.3.3" },
 ]
@@ -627,6 +629,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/76/6a/aad1817e60f07e5ebc111affee15d4dff9d324981005310566c40f08786c/sty-1.0.6.tar.gz", hash = "sha256:d43ecb71b7bad0b56d622cb219d0be303c16fcb4143b84d1465ded22e29baa00", size = 12217, upload-time = "2023-11-27T13:57:12.931Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ec/89/22b3b7f25f67d04690e3b565ca89062a6e7afb1e7124342d5b5b22e8f014/sty-1.0.6-py3-none-any.whl", hash = "sha256:2b1eba187b3961644f797f97177f939c109c916d3d3a2cb6784454d1f1ce4983", size = 12553, upload-time = "2023-11-27T13:57:11.4Z" },
+]
+
+[[package]]
+name = "tuspyserver"
+version = "4.2.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "fastapi" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/af/c8/81a69c5693f0a84730ebedee7cf0116b7fe7ecba03a0b79ce3108e2c0527/tuspyserver-4.2.3.tar.gz", hash = "sha256:2e681ce05c4d534720da4c1e16fb793dac858e88227ffec5b19c1b7446fa5afe", size = 17743, upload-time = "2025-11-02T21:38:21.573Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/16/339fdc2a3ee6b488bdbd978a0fa3f96dca2aa09ebd9a85688808fb80f7cf/tuspyserver-4.2.3-py3-none-any.whl", hash = "sha256:145f5cb57da2d24d7fcc4e21d684d109243e785fa0e580013da087c9f0f9df43", size = 24027, upload-time = "2025-11-02T21:38:20.535Z" },
 ]
 
 [[package]]

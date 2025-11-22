@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vuetify from 'vite-plugin-vuetify'
+import path from "path-browserify"
 
 export default defineConfig({
   plugins: [
@@ -9,7 +10,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': '/src'
+      "@": "/src",
+      path: "path-browserify",
     }
   },
   server: {
