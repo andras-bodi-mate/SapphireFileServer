@@ -8,7 +8,7 @@ from core import Core
 
 def main():
     Logger.logInfo("Program started")
-    server = Server(Path.home() / Path("Downloads"), Core.getPath("frontend/dist"))
+    server = Server(Path("/mnt/data/data"), Core.getPath("frontend/dist"))
     uvicorn.run(server.app, host = "0.0.0.0", port = 8000, ssl_keyfile = Core.getPath("backend/keyFile.pem"), ssl_certfile = Core.getPath("backend/certFile.pem"))
 
 if __name__ == "__main__":

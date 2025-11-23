@@ -14,6 +14,9 @@ export default defineConfig({
       path: "path-browserify",
     }
   },
+  build: {
+    minify: false,
+  },
   server: {
     port: 8080,
     open: true

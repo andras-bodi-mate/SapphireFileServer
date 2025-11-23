@@ -313,14 +313,15 @@ class Server:
             
         def finishUpload(filePathStr: str, metadata: dict):
             print("Upload complete")
-            print(filePathStr)
-            print(metadata)
             filePath = Path(filePathStr)
-            infoFile = filePath.with_suffix(".info")
-            infoFile.unlink(missing_ok = True)
-            filePath.rename(self.directory / metadata["directory"] / metadata["filename"])
-            if self.tusLocksDirectory.exists() and len(list(self.tusLocksDirectory.iterdir())) == 0:
-               self.tusLocksDirectory.rmdir()
+            newPath: Path = self.directory / metadata["directory"] / metadata["filename"]
+            print(newPath.as_posix())
+            if not newPath.resolve().is_relative_to(self.directory):
+                return {"error": "Invalid path"}
+            newPath.parent.mkdir(parents = True, exist_ok = True)
+            if newPath.exists():
+                newPath = newPath.with_stem(Server.getAlteredName(newPath.stem))
+            shutil.move(filePath, newPath)
 
         self.app.include_router(
             create_tus_router(

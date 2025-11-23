@@ -23,7 +23,7 @@
       <v-progress-linear :active="isZipping || isLoading" indeterminate rounded="pill" location="bottom" absolute></v-progress-linear>
     </v-app-bar>
 
-    <v-navigation-drawer app v-model="drawer" :rail="rail" permanent @click="rail = false">
+    <v-navigation-drawer app v-model="drawer" :rail="rail" permanent>
       <v-list :lines="false" density="compact" nav>
         <v-btn  class="mb-2" size="small" :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'" variant="text" @click.stop="rail = !rail"></v-btn>
         <v-list-item
@@ -43,7 +43,7 @@
     </v-navigation-drawer>
 
     <v-main>
-      <v-container style="height: 100%;">
+      <v-container class="pl-10 pr-10" style="height: 100%; max-width: none;">
         <div v-shortkey="['ctrl', 'a']" @shortkey="isDialogOpen() ? 0 : selectAll()" style="display: none"></div>
         <div v-shortkey="['ctrl', 'i']" @shortkey="isDialogOpen() ? 0 : invertSelection()" style="display: none"></div>
         <div v-shortkey="['esc']" @shortkey="cancelOperation()" style="display: none"></div>
@@ -152,9 +152,18 @@
               :disabled="selectedItems.length === 0" @click="downloadSelectedFiles()">
                 Download
               </v-btn>
-              <v-btn class="text-none" prepend-icon="mdi-upload" variant="text" rounded="pill" tabindex="-1"
-              @click="uploadFiles()">
+              <v-btn class="text-none" prepend-icon="mdi-upload" variant="text" rounded="pill" tabindex="-1">
                 Upload
+                <v-menu activator="parent">
+                  <v-list style="border-radius: 28px">
+                    <v-list-item class="ml-2 mr-2" rounded="pill" @click="uploadFiles()">
+                      <v-list-item-title>{{ "Upload files" }}</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item class="ml-2 mr-2" rounded="pill" @click="uploadDirectory()">
+                      <v-list-item-title>{{ "Upload directory" }}</v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
               </v-btn>
             </div>
           </div>
@@ -240,8 +249,19 @@
               Couldn't reach server. This could be because the server is offline or due to bad internet connection.
             </v-banner-text>
           </v-banner>
+          <v-banner
+          v-if="sortedItems.length == 0"
+          class="justify-center text-grey"
+          >
+            <v-icon class="mr-3" size="large">
+              mdi-information
+            </v-icon>
+            <v-banner-text>
+              No items to display.
+            </v-banner-text>
+          </v-banner>
           <v-list-item
-            v-else
+            v-if="sortedItems.length !== 0 && !networkError"
             v-for="(file, index) in sortedItems"
             :key="index"
             :value="file"
@@ -288,11 +308,11 @@
           <v-list class="pa-3 elevation-5" rounded="xl" style="max-height: 500px;" v-if="itemsBeingUploadedInfo.length !== 0">
             <div class="d-flex ma-3 justify-space-between align-center ga-10">
               <p size="x-large">{{ `Uploading ${itemsBeingUploadedInfo.length} items` }}</p>
-              <v-btn icon="mdi-close" variant="text"></v-btn>
+              <v-btn icon="mdi-close" variant="text" @click="cancelAllUploads()"></v-btn>
             </div>
             <v-divider></v-divider>
             <div class="d-flex ma-3 align-center">
-              <p>{{ `${uploadRemainingSeconds >= 3600 ? `${Math.floor(uploadRemainingSeconds / 3600)} hours ` : ''}${uploadRemainingSeconds >= 60 ? `${Math.floor(uploadRemainingSeconds / 60) % 60} minutes ` : ''}${uploadRemainingSeconds < 3600 ? `and ${uploadRemainingSeconds % 60} seconds` : ''} left...` }}</p>
+              <p>{{ uploadRemainingSeconds > 0 ? `${uploadRemainingSeconds >= 3600 ? `${Math.floor(uploadRemainingSeconds / 3600)} hours ` : ''}${uploadRemainingSeconds >= 60 ? `${Math.floor(uploadRemainingSeconds / 60) % 60} minutes and ` : ''}${uploadRemainingSeconds < 3600 ? `${uploadRemainingSeconds % 60} seconds` : ''} left...`  : "Calculating remaining time..." }}</p>
             </div>
             <v-divider></v-divider>
             <div v-for="itemInfo in itemsBeingUploadedInfo" class="d-flex ma-3 align-center justify-space-between">
@@ -301,13 +321,29 @@
                 <p>{{ itemInfo.name }}</p>
               </div>
               <v-hover>
-                <template v-slot:default="{ isHovering }">
-                  <v-btn :loading="!isHovering" variant="text">
-                    <template v-slot:loader>
-                      <v-progress-circular :indeterminate="itemInfo.progress === -1" :model-value="itemInfo.progress"></v-progress-circular>
-                    </template>
-                    {{ isHovering }}
-                  </v-btn>
+                <template v-slot:default="{ isHovering, props }">
+                  <v-span v-bind="props">
+                    <v-tooltip v-bind="props" text="Cancel" location="top" transition="fade-transition" open-delay="750">
+                      <template v-slot:activator="{ props }">
+                        <v-btn
+                          icon="mdi-close"
+                          v-bind="props"
+                          size="30"
+                          :loading="isHovering ? false : true"
+                          variant="text"
+                          @click="cancelUpload(itemInfo)"
+                        >
+                          <template #loader>
+                            <v-progress-circular
+                              size="25"
+                              :indeterminate="itemInfo.progress === -1"
+                              :model-value="itemInfo.progress"
+                            ></v-progress-circular>
+                          </template>
+                        </v-btn>
+                      </template>
+                    </v-tooltip>
+                  </v-span>
                 </template>
               </v-hover>
             </div>
@@ -414,6 +450,8 @@ import VueCookies from 'vue-cookies'
 import { getFileIcon, fileExtensionDescriptions } from "./fileIcons.js";
 import { Upload } from 'tus-js-client';
 import { lookup } from 'mime-types';
+import { breakpoints } from 'vuetify/lib/composables/display.mjs';
+import { trunkSelectStrategy } from 'vuetify/lib/composables/nested/selectStrategies.mjs';
 
 const theme = useTheme()
 
@@ -555,56 +593,89 @@ async function downloadSelectedFiles() {
   )
 }
 
+function createUpload(file, itemInfo, onProgress, onSuccess) {
+  return new Upload(file, {
+    endpoint: "/upload/",
+    retryDelays: [0, 1000, 2000, 3000, 4000],
+    uploadStalledRetryDelay: 0,
+    chunkSize: 8 * 1024 * 1024,
+    metadata: {
+      filename: file.name,
+      filetype: lookup(file.name),
+      directory: itemInfo.directory,
+    },
+    onError: function (error) {
+      console.error('Failed because: ' + error + '\n' + new Error().stack);
+    },
+    onProgress: function (bytesUploaded, bytesTotal) {
+      var percentage = (bytesUploaded / bytesTotal) * 100;
+      console.log(bytesUploaded, bytesTotal, percentage.toFixed(2) + '%');
+      itemInfo.bytesUploaded = bytesUploaded;
+      itemInfo.progress = percentage;
+      if (itemInfo.uploadStartTime === -1) {
+        itemInfo.uploadStartTime = Date.now() / 1000;
+        itemInfo.estimatedTimeRemaining = 60;
+      }
+      else {
+        itemInfo.estimatedTimeRemaining = Math.round((bytesTotal - bytesUploaded) / (bytesUploaded / (Date.now() / 1000 - itemInfo.uploadStartTime)));
+      }
+
+      uploadRemainingSeconds.value = 0; 
+      for (const itemInfo of itemsBeingUploadedInfo.value) {
+        uploadRemainingSeconds.value = Math.max(uploadRemainingSeconds.value, itemInfo.estimatedTimeRemaining);
+      }
+
+      onProgress();
+    },
+    onSuccess: function () {
+      uploadedItems.value.push(itemInfo);
+      const index = itemsBeingUploadedInfo.value.indexOf(itemInfo);
+      if (index !== -1) {
+        itemsBeingUploadedInfo.value.splice(itemsBeingUploadedInfo.value.indexOf(itemInfo), 1);
+      }
+      onSuccess();
+    },
+  })
+}
+
 async function uploadFiles() {
-  uploadRemainingSeconds.value = 70;
-  var input = document.createElement('input');
-  input.type = 'file';
+  var input = document.createElement("input");
+  input.type = "file";
   input.multiple = true;
   input.onchange = async e => {    
     const uploads = [];
     let lastItemUpdate = 0;
 
+    
     for (const file of input.files) {
+      for (const itemInfo of itemsBeingUploadedInfo.value) {
+        if (itemInfo.name === file.name && itemInfo.directory === currentPath.value) {
+          continue;
+        }
+      }
       let itemInfo = reactive({
         name: file.name,
         size: file.size,
-        progress: -1
+        bytesUploaded: 0,
+        progress: -1,
+        directory: currentPath.value,
+        uploadStartTime: -1,
+        estimatedTimeRemaining: -1,
+        upload: null
       });
       itemsBeingUploadedInfo.value.push(itemInfo);
 
-      console.log("itemsBeingUploadedInfo:", itemsBeingUploadedInfo.value);
+      let newUpload = createUpload(file, itemInfo, () => {
+        let now = Date.now();
+        if (now - lastItemUpdate > 1000) {
+          updateItems();
+          lastItemUpdate = now;
+        }
+      });
+      uploads.push(newUpload);
+      itemInfo.upload = newUpload;
+    };
 
-      uploads.push(
-          new Upload(file, {
-            endpoint: "/upload/",
-            retryDelays: [0, 1000, 2000, 3000, 4000],
-            uploadStalledRetryDelay: 0,
-            chunkSize: 16 * 1024 * 1024,
-            metadata: {
-              filename: file.name,
-              filetype: lookup(file.name),
-              directory: currentPath.value,
-            },
-            onError: function (error) {
-              console.log('Failed because: ' + error)
-            },
-            onProgress: function (bytesUploaded, bytesTotal) {
-              var percentage = (bytesUploaded / bytesTotal) * 100;
-              console.log(bytesUploaded, bytesTotal, percentage.toFixed(2) + '%');
-              itemInfo.progress = percentage;
-            },
-            onSuccess: function () {
-              uploadedItems.value.push(itemInfo);
-              let now = Date.now();
-              if (now - lastItemUpdate > 1000) {
-                updateItems();
-                lastItemUpdate = now;
-              }
-              itemsBeingUploadedInfo.value.splice(itemsBeingUploadedInfo.value.indexOf(itemInfo), 1);
-            },
-          })
-      );
-    }
 
     for (const upload of uploads) {
       // Check if there are any previous uploads to continue.
@@ -620,6 +691,114 @@ async function uploadFiles() {
     }
   };
   input.click();
+}
+
+async function uploadDirectory() {
+  var input = document.createElement("input");
+  input.type = "file";
+  input.directory = "true";
+  input.webkitdirectory = "true"
+
+  input.onchange = async e => {    
+    const uploads = [];
+    let numFilesUploading = 0;
+    let numFilesUploaded = 0;
+
+    const firstFile = input.files[0];
+    const directoryName = firstFile.webkitRelativePath.slice(0, firstFile.webkitRelativePath.indexOf('/'))
+
+    let directoryInfo = reactive({
+      name: directoryName,
+      size: -1,
+      progress: -1,
+      directory: currentPath.value,
+      uploadStartTime: -1,
+      estimatedTimeRemaining: -1,
+      children: [],
+      upload: null
+    });
+    itemsBeingUploadedInfo.value.push(directoryInfo);
+
+    for (const file of input.files) {
+      console.log("Loading", file.webkitRelativePath)
+      let fileInfo = reactive({
+        name: file.name,
+        size: file.size,
+        directory: getPathParent(currentPath.value + file.webkitRelativePath),
+        bytesUploaded: 0,
+        progress: -1,
+        uploadStartTime: -1,
+        estimatedTimeRemaining: -1,
+        upload: null
+      });
+
+      console.log(currentPath.value, file.webkitRelativePath, getPathParent(currentPath.value + file.webkitRelativePath));
+
+      let newUpload = createUpload(file, fileInfo, () => {
+        if (numFilesUploading < input.files.length) {
+          numFilesUploading++;
+          if (numFilesUploading === input.files.length) {
+            directoryInfo.uploadStartTime = Date.now() / 1000;
+          }
+        }
+
+        let totalBytes = 0;
+        let totalUploaded = 0;
+        for (const info of directoryInfo.children) {
+          totalBytes += info.size;
+          totalUploaded += info.bytesUploaded;
+        }
+
+        console.log("totalBytes, totalUploaded", totalBytes, totalUploaded);
+
+        if (numFilesUploading === input.files.length) {
+          directoryInfo.progress = (totalUploaded / totalBytes) * 100;
+          directoryInfo.estimatedTimeRemaining = Math.round((totalBytes - totalUploaded) / (totalUploaded / (Date.now() / 1000 - directoryInfo.uploadStartTime)));
+        }
+      }, () => {
+        numFilesUploaded++;
+        if (numFilesUploaded === input.files.length) {
+          updateItems();
+          itemsBeingUploadedInfo.value.splice(itemsBeingUploadedInfo.value.indexOf(directoryInfo), 1);
+        }
+      });
+      fileInfo.upload = newUpload;
+      directoryInfo.children.push(fileInfo);
+      uploads.push(newUpload);
+    }
+
+    for (const upload of uploads) {
+      // Check if there are any previous uploads to continue.
+      upload.findPreviousUploads().then(function (previousUploads) {
+        // Found previous uploads so we select the first one.
+        if (previousUploads.length) {
+          upload.resumeFromPreviousUpload(previousUploads[0]);
+        }
+        // Start the upload
+        upload.start();
+      });
+    }
+  };
+  input.click();
+}
+
+function cancelUpload(cancelledItemInfo) {
+  itemsBeingUploadedInfo.value.splice(itemsBeingUploadedInfo.value.indexOf(cancelledItemInfo), 1);
+  if (cancelledItemInfo.size === -1) {
+    for (const itemInfo of cancelledItemInfo.children) {
+      cancelUpload(itemInfo);
+    }
+  }
+  else {
+    cancelledItemInfo.upload.abort(true);
+  }
+}
+
+function cancelAllUploads() {
+  for (const itemInfo of itemsBeingUploadedInfo.value) {
+    cancelUpload(itemInfo);
+  }
+  itemsBeingUploadedInfo.value = [];
 }
 
 function changeSorting(newMode) {
@@ -1102,6 +1281,14 @@ function getPathSubPaths() {
 
 function getPathLastFolder(path) {
   return path.slice(path.lastIndexOf('/', path.length - 2) + 1, path.length - 1);
+}
+
+function getPathParent(path) {
+  const lastSlashIndex = path.lastIndexOf('/');
+  if (lastSlashIndex !== -1) {
+    return path.slice(0, lastSlashIndex);
+  }
+  return "";
 }
 
 function setCurrentPath(path) {
