@@ -3,11 +3,15 @@ import tempfile
 import shutil
 import random
 import base64
+import json
 from pathlib import Path
 from datetime import datetime, timedelta
+from dataclasses import dataclass
+from time import sleep
+from typing import Generator
 
 from fastapi import FastAPI, Header
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import HTTPException
@@ -51,20 +55,54 @@ class ItemShareRequest(BaseModel):
     path: str
     expirationTime: int
 
+@dataclass
+class DirectoryInfo:
+    size: int = 0
+    numFiles: int = 0
+    numSubdirectories: int = 0
+
+    def toString(self):
+        return json.dumps({
+            "size": self.size,
+            "numFiles": self.numFiles,
+            "numSubdirectories": self.numSubdirectories
+        }) + '\n'
+
 class Server:
     @staticmethod
-    def getDirectorySize(path: Path):
-        size = 0
+    def getDirectoryInfo(path: Path, directoryInfo = None) -> Generator[DirectoryInfo, None, None]:
+        if not directoryInfo:
+            directoryInfo = DirectoryInfo()
         try:
-            for p in path.iterdir():
-                if p.is_file():
-                    size += p.stat().st_size
-                elif p.is_dir():
-                    size += Server.getDirectorySize(p)
+            subpaths = list(path.iterdir())
+            if subpaths:
+                for subpath in subpaths:
+                    if subpath.is_file():
+                        directoryInfo.size += subpath.stat().st_size
+                        directoryInfo.numFiles += 1
+                        yield directoryInfo
+                    elif subpath.is_dir():
+                        directoryInfo.numSubdirectories += 1
+                        for info in Server.getDirectoryInfo(subpath, directoryInfo):
+                            directoryInfo = info
+                            yield info
+            else:
+                yield directoryInfo
         except PermissionError:
-            pass
-        return size
+            yield directoryInfo
     
+    @staticmethod
+    def getDirectoryInfoThrottled(path: Path):
+        lastUpdate = None
+        lastDirectoryInfo = DirectoryInfo()
+        for directoryInfo in Server.getDirectoryInfo(path):
+            lastDirectoryInfo = directoryInfo
+            now = datetime.now()
+            if not lastUpdate or (now - lastUpdate > timedelta(seconds = 0.04)):
+                lastUpdate = now
+                yield directoryInfo.toString()
+        yield lastDirectoryInfo.toString()
+
     @staticmethod
     def addDirectoryToArchive(archive: zipfile.ZipFile, rootDirectory: Path, directory: Path = None):
         if not directory:
@@ -116,7 +154,7 @@ class Server:
 
         self.app = FastAPI(lifespan = self.lifespan)
         self.davApp = WsgiDAVApp(config = {
-            "mount_path": "/file",
+            "mount_path": "/webdav",
             "provider_mapping": {
                 "/": FilesystemProvider(self.directory)
             },
@@ -160,7 +198,7 @@ class Server:
         @self.app.get("/download/{requestedPath:path}")
         async def download(requestedPath: str):
             path = (self.directory / requestedPath).resolve()
-            if not path.is_relative_to(self.directory):
+            if not path.is_relative_to(self.directory) or path == self.directory:
                 return {"error": "Invalid path"}
 
             if not path.exists():
@@ -174,11 +212,13 @@ class Server:
                 
             elif path.is_dir():
                 if path.exists():
-                    archivePath = (self.temporaryStorage / path.name).with_suffix(".zip")
+                    archivePath = (self.temporaryStorageDirectory / path).with_suffix(".zip")
+                    if archivePath.exists():
+                        archivePath.unlink()
                     print("zipping...")
                     with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
                         Server.addDirectoryToArchive(archive, path)
-                    print("zipped")
+                    print("zipped at", archivePath.as_posix())
                     return FileResponse(archivePath)
                 else:
                     return {"error": "Directory doesn't exist"}
@@ -306,6 +346,21 @@ class Server:
             newSharedItem = SharedItem(path, datetime.now() + timedelta(seconds = itemShareRequest.expirationTime))
             self.sharedItems.append(newSharedItem)
             return newSharedItem.id
+        
+        @self.app.get("/details/{path:path}")
+        async def details(path: str):
+            path: Path = self.directory / Path(path)
+            stats = path.stat()
+            return {
+                "created": stats.st_ctime,
+                "lastModified": stats.st_mtime,
+                "lastAccessed": stats.st_atime
+            }
+        
+        @self.app.get("/directorySize/{path:path}")
+        async def directorySize(path: str):
+            path: Path = self.directory / Path(path)
+            return StreamingResponse(Server.getDirectoryInfoThrottled(path), media_type = "application/json")
 
         def validateUpload(metadata: dict, uploadInfo: dict):
             if "filename" not in metadata or "directory" not in metadata:
@@ -337,3 +392,4 @@ class Server:
     def lifespan(self, app: FastAPI):
         yield
         shutil.rmtree(self.temporaryStorageDirectory)
+        Logger.logInfo("Cleaning up temporary directory")

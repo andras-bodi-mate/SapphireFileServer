@@ -1,6 +1,6 @@
 <template>
   <v-app>
-    <v-app-bar :color="theme.global.name.value === 'light' ? 'primary' : 'grey-darken-3'" app>
+    <v-app-bar :color="theme.global.name.value === 'light' ? 'primary' : 'grey-darken-3'" style="z-index: 1000;" app>
       <v-btn icon variant="plain" :ripple="false" href="http://localhost:5173/">
         <img
           src="/res/images/logo.svg"
@@ -15,17 +15,25 @@
         @click="switchTheme()"
         ></v-btn>
         <span>Signed in as:</span>
-        <v-btn prepend-icon="mdi-account-circle" rounded="xl" stacked circle>
-          admin
+        <v-btn class="text-none" size="large" rounded="pill" prepend-icon="mdi-account-circle">
+          {{ username }}
+          <v-menu activator="parent">
+            <v-list style="border-radius: 28px;">
+              <v-list-item class="ml-2 mr-2" rounded="pill" @click="signOut()">
+                <v-list-item-title>
+                  Sign out
+                </v-list-item-title>
+              </v-list-item>
+            </v-list>
+          </v-menu>
         </v-btn>
       </div>
-
       <v-progress-linear :active="isZipping || isLoading" indeterminate rounded="pill" location="bottom" absolute></v-progress-linear>
     </v-app-bar>
 
     <v-navigation-drawer app v-model="drawer" :rail="rail" permanent>
       <v-list :lines="false" density="compact" nav>
-        <v-btn  class="mb-2" size="small" :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'" variant="text" @click.stop="rail = !rail"></v-btn>
+        <v-btn class="mb-2" size="small" :icon="rail ? 'mdi-chevron-right' : 'mdi-chevron-left'" variant="text" @click.stop="rail = !rail"></v-btn>
         <v-list-item
           v-for="(item, i) in navigationDrawerMenus"
           :key="i"
@@ -42,8 +50,8 @@
       </v-list>
     </v-navigation-drawer>
 
-    <v-main>
-      <v-container class="pl-10 pr-10" style="height: 100%; max-width: none;">
+    <v-main @click="clearSelection()">
+      <v-container @click.stop class="pl-10 pr-10" style="height: 100%; max-width: none;">
         <div v-shortkey="['ctrl', 'a']" @shortkey="isDialogOpen() ? 0 : selectAll()" style="display: none"></div>
         <div v-shortkey="['ctrl', 'i']" @shortkey="isDialogOpen() ? 0 : invertSelection()" style="display: none"></div>
         <div v-shortkey="['esc']" @shortkey="cancelOperation()" style="display: none"></div>
@@ -142,10 +150,16 @@
                 <template v-slot:activator="{ props }">
                   <v-btn v-bind="props" width="36" height="36" icon="" variant="text" rounded="pill" tabindex="-1"
                   @click="promptShare()" :disabled="selectedItems.length !== 1">
-                    <v-icon size="20">mdi-export-variant</v-icon>
+                    <v-icon size="20">mdi-share-variant</v-icon>
                   </v-btn>
                 </template>
               </v-tooltip>
+            </div>
+            <div class="d-flex justify-start pa-3">
+              <v-btn class="text-none" prepend-icon="mdi-information" variant="text" rounded="pill" tabindex="-1"
+              @click="openDetails()" :disabled="selectedItems.length !== 1">
+                Details
+              </v-btn>
             </div>
             <div class="d-flex justify-start pa-3">
               <v-btn class="text-none" prepend-icon="mdi-download" variant="text" rounded="pill" tabindex="-1"
@@ -157,10 +171,14 @@
                 <v-menu activator="parent">
                   <v-list style="border-radius: 28px">
                     <v-list-item class="ml-2 mr-2" rounded="pill" @click="uploadFiles()">
-                      <v-list-item-title>{{ "Upload files" }}</v-list-item-title>
+                      <v-list-item-title>
+                        Upload files
+                      </v-list-item-title>
                     </v-list-item>
                     <v-list-item class="ml-2 mr-2" rounded="pill" @click="uploadDirectory()">
-                      <v-list-item-title>{{ "Upload directory" }}</v-list-item-title>
+                      <v-list-item-title>
+                        Upload directory
+                      </v-list-item-title>
                     </v-list-item>
                   </v-list>
                 </v-menu>
@@ -276,6 +294,7 @@
             }"
             @click="isLoading ? 0 : delayedToggleFileSelected(file)"
             @dblclick="isLoading ? 0 : changePath(file)"
+            @contextmenu.prevent="openContextMenu($event, file)"
             v-shortkey="['enter']"
             @shortkey="(isLoading || selectedItems.length !== 1 || isDialogOpen()) ? 0 : changePath(selectedItems[0])"
           >
@@ -290,13 +309,105 @@
               </div>
 
               <div style="flex: 1;">
-                {{ getFileSize(file) }}
+                {{ getFileSizeDescription(file.size) }}
               </div>
 
               <div style="flex: 1; justify-self: right;">
                 {{ getItemLastModifiedDate(file) }}
               </div>
             </div>
+              <v-menu
+                v-if="rightClickedItem === file"
+                v-model="isRightClickMenuOpen"
+                absolute
+                :close-on-content-click="true"
+                :open-on-click="false"
+                :style="{'position': 'absolute', 'left': `${menuLocation.x}px`, 'top': `${menuLocation.y}px`}"
+              >
+              <v-list class="pa-3" rounded="xl">
+                <v-list-item
+                  class="ma-2"
+                  rounded="pill"
+                  prepend-icon="mdi-open-in-new"
+                  @click="changePath(file)"
+                  :disabled="selectedItems.length !== 1"
+                >
+                  <v-list-item-title>Open</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-share-variant"
+                  @click="promptShare()"
+                  :disabled="selectedItems.length !== 1"
+                >
+                  <v-list-item-title>Share</v-list-item-title>
+                </v-list-item>
+                <v-divider></v-divider>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-content-cut"
+                  @click="cutSelected()"
+                  :disabled="selectedItems.length === 0"
+                >
+                  <v-list-item-title>Cut</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-content-copy"
+                  @click="copySelected()"
+                  :disabled="selectedItems.length === 0"
+                >
+                  <v-list-item-title>Copy</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-content-paste"
+                  @click="pasteSelected()"
+                  :disabled="clipboard.length === 0"
+                >
+                  <v-list-item-title>Paste</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-form-textbox"
+                  @click="promptNewName()"
+                  :disabled="selectedItems.length !== 1"
+                >
+                  <v-list-item-title>Rename</v-list-item-title>
+                </v-list-item>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-delete"
+                  @click="promptDelete()"
+                  :disabled="selectedItems.length === 0"
+                >
+                  <v-list-item-title>Delete</v-list-item-title>
+                </v-list-item>
+                <v-divider></v-divider>
+                <v-list-item
+                  class="ma-2"
+                  size="small"
+                  rounded="pill"
+                  prepend-icon="mdi-information"
+                  @click="openDetails()"
+                  :disabled="selectedItems.length !== 1"
+                >
+                  <v-list-item-title>Details</v-list-item-title>
+                </v-list-item>
+              </v-list>
+            </v-menu>
           </v-list-item>
         </v-list>
         <div class="d-flex flex-column align-end justify-end ma-5" style="position: fixed; bottom: 0px; right: 0px;">
@@ -430,6 +541,50 @@
           </v-card-actions>
         </v-card>
       </v-dialog>
+      <v-dialog v-model="isViewingDetails" max-width="550">
+        <v-card class="pa-6" rounded="xl" :title="`${selectedItems[0].name} details`"
+        >
+          <v-list class="d-flex flex-column ps-6 ga-2">
+            <div class="text-none d-flex ga-2">
+              <v-icon>
+                {{ getFileIcon(selectedItems[0]) }}
+              </v-icon>
+              <p>
+                {{ selectedItems[0].name }}
+              </p>
+            </div>
+            <p>
+              {{ `Type of file: ${getItemTypeDescription(selectedItems[0])}${selectedItems[0].size > 0 ? getItemNameExtension(selectedItems[0].name) : ''}` }}
+            </p>
+            <v-divider></v-divider>
+            <p>
+              {{ `Location: ${currentPath !== '' ? currentPath : '/'}` }}
+            </p>
+            <p>
+              {{ `Size: ${getItemSizeDescription(selectedItems[0])}` }}
+            </p>
+            <p v-if="selectedItems[0].size < 0">
+              {{ `Number of files: ${directoryDetails.numFiles >= 0 ? directoryDetails.numFiles : 'Loading...'}` }}
+            </p>
+            <p v-if="selectedItems[0].size < 0">
+              {{ `Number of subdirectories: ${directoryDetails.numSubdirectories >= 0 ? directoryDetails.numSubdirectories : 'Loading...'}` }}
+            </p>
+            <v-divider></v-divider>
+            <p>
+              {{ `Created: ${new Date(itemDetails.created * 1000).toString()}` }}
+            </p>
+            <p>
+              {{ `Last modified: ${new Date(itemDetails.lastModified * 1000).toString()}` }}
+            </p>
+            <p>
+              {{ `Last accessed: ${new Date(itemDetails.lastAccessed * 1000).toString()}` }}
+            </p>
+          </v-list>
+          <v-card-actions>
+            <v-btn autofocus @click="closeDetails()" color="primary">Ok</v-btn>
+          </v-card-actions>
+        </v-card>
+      </v-dialog>
     </v-main>
     <v-snackbar
       v-model="linkCopied"
@@ -450,12 +605,10 @@ import VueCookies from 'vue-cookies'
 import { getFileIcon, fileExtensionDescriptions } from "./fileIcons.js";
 import { Upload } from 'tus-js-client';
 import { lookup } from 'mime-types';
-import { breakpoints } from 'vuetify/lib/composables/display.mjs';
-import { trunkSelectStrategy } from 'vuetify/lib/composables/nested/selectStrategies.mjs';
 
 const theme = useTheme()
-
 const keysDown = ref(new Set());
+const username = ref("");
 
 function keyDownCallback(event) {
   keysDown.value.add(event.key);
@@ -469,6 +622,15 @@ onMounted(() => {
   checkStoredTheme();
   window.addEventListener('keydown', keyDownCallback);
   window.addEventListener('keyup', keyUpCallback);
+  fetch("/api/state").then(async response => {
+    response = await response.json();
+    if (response.status == "OK" && response.data.authentication_level !== 0) {
+      username.value = response.data.username;
+    }
+    else {
+      window.location.reload();
+    }
+  })
   updateItems();
 });
 
@@ -507,11 +669,16 @@ const sortedItems = ref([]);
 const itemRefs = ref({});
 const clipboard = ref([]);
 const itemsBeingCut = ref([]);
+const selectedItems = ref([]);
+const menuLocation = ref({ x: 0, y: 0 })
+const rightClickedItem = ref(null);
 
 const isRenaming = ref(false);
 const itemNewName = ref("");
 const isDeleting = ref(false);
 const isSharing = ref(false);
+const isViewingDetails = ref(false);
+const isRightClickMenuOpen = ref(false);
 const expirationTime = ref(86400);
 const customExpirationTimeDays = ref(0);
 const customExpirationTimeHours = ref(0);
@@ -525,6 +692,8 @@ const uploadRemainingSeconds = ref(0);
 const isZipping = ref(false);
 const isLoading = ref(false);
 const networkError = ref(false);
+const itemDetails = ref({});
+const directoryDetails = ref({});
 
 function switchTheme() {
   theme.toggle();
@@ -538,11 +707,13 @@ function checkStoredTheme() {
   }
 }
 
-
 async function updateItems() {
   try {
     isLoading.value = true;
     const response = await fetch("/files/" + currentPath.value);
+    if (response.redirected) {
+      window.location.pathname = "/";
+    }
     if (!response.ok) {
       setCurrentPath("");
       isLoading.value = false;
@@ -554,7 +725,7 @@ async function updateItems() {
     networkError.value = false;
     items.value = data;
     sortedItems.value = sortFiles();
-    selectedItems.value = [];
+    clearSelection()
     isLoading.value = false;
 
   } catch (err) {
@@ -565,9 +736,13 @@ async function updateItems() {
 }
 
 async function openFile(file) {
-  fetch("/file/" + currentPath.value + file.name)
-  .then(res => res.blob())
-  .then(blob => {
+  fetch("/download/" + currentPath.value + file.name)
+  .then(res => {
+    if (res.redirected) {
+      window.location.pathname = "/";
+    }
+    return res.blob();
+  }).then(blob => {
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank");
     setTimeout(() => URL.revokeObjectURL(url), 10000);
@@ -578,13 +753,13 @@ async function openFile(file) {
 async function downloadSelectedFiles() {
   isZipping.value = true;
   selectedItems.value.forEach( (file, i, array) => {
-      fetch("/file/" + currentPath.value + file.name)
+      fetch("/download/" + currentPath.value + file.name + '/')
       .then(res => res.blob())
       .then(blob => {
         const link = document.createElement('a');
         const url = URL.createObjectURL(blob);
         link.href = url;
-        link.download = file.name;
+        link.download = file.size >= 0 ? file.name : file.name + ".zip";
         isZipping.value = false;
         link.click();
         URL.revokeObjectURL(url);
@@ -593,7 +768,8 @@ async function downloadSelectedFiles() {
   )
 }
 
-function createUpload(file, itemInfo, onProgress, onSuccess) {
+function createUpload(file, itemInfo, onProgress = () => {}, onSuccess = () => {}) {
+  console.log("Creating upload for", itemInfo.name);
   return new Upload(file, {
     endpoint: "/upload/",
     retryDelays: [0, 1000, 2000, 3000, 4000],
@@ -645,7 +821,6 @@ async function uploadFiles() {
   input.onchange = async e => {    
     const uploads = [];
     let lastItemUpdate = 0;
-
     
     for (const file of input.files) {
       for (const itemInfo of itemsBeingUploadedInfo.value) {
@@ -665,7 +840,7 @@ async function uploadFiles() {
       });
       itemsBeingUploadedInfo.value.push(itemInfo);
 
-      let newUpload = createUpload(file, itemInfo, () => {
+      let newUpload = createUpload(file, itemInfo, () => {}, () => {
         let now = Date.now();
         if (now - lastItemUpdate > 1000) {
           updateItems();
@@ -698,6 +873,7 @@ async function uploadDirectory() {
   input.type = "file";
   input.directory = "true";
   input.webkitdirectory = "true"
+  const uploadPath = currentPath.value;
 
   input.onchange = async e => {    
     const uploads = [];
@@ -711,7 +887,7 @@ async function uploadDirectory() {
       name: directoryName,
       size: -1,
       progress: -1,
-      directory: currentPath.value,
+      directory: uploadPath,
       uploadStartTime: -1,
       estimatedTimeRemaining: -1,
       children: [],
@@ -719,22 +895,19 @@ async function uploadDirectory() {
     });
     itemsBeingUploadedInfo.value.push(directoryInfo);
 
-    for (const file of input.files) {
-      console.log("Loading", file.webkitRelativePath)
-      let fileInfo = reactive({
+    const processFile = async (file) => {
+      let fileInfo = {
         name: file.name,
         size: file.size,
-        directory: getPathParent(currentPath.value + file.webkitRelativePath),
+        directory: getPathParent(uploadPath + file.webkitRelativePath),
         bytesUploaded: 0,
         progress: -1,
         uploadStartTime: -1,
         estimatedTimeRemaining: -1,
         upload: null
-      });
+      };
 
-      console.log(currentPath.value, file.webkitRelativePath, getPathParent(currentPath.value + file.webkitRelativePath));
-
-      let newUpload = createUpload(file, fileInfo, () => {
+      const newUpload = createUpload(file, fileInfo, () => {
         if (numFilesUploading < input.files.length) {
           numFilesUploading++;
           if (numFilesUploading === input.files.length) {
@@ -763,21 +936,37 @@ async function uploadDirectory() {
         }
       });
       fileInfo.upload = newUpload;
+
       directoryInfo.children.push(fileInfo);
       uploads.push(newUpload);
-    }
+    };
 
-    for (const upload of uploads) {
-      // Check if there are any previous uploads to continue.
-      upload.findPreviousUploads().then(function (previousUploads) {
-        // Found previous uploads so we select the first one.
-        if (previousUploads.length) {
-          upload.resumeFromPreviousUpload(previousUploads[0]);
-        }
-        // Start the upload
-        upload.start();
-      });
+    const filePromises = new Array(input.files.length);
+
+    for (const file of input.files) {
+        console.log("Uploading", file.name)
+        const promise = processFile(file);
+        filePromises.push(promise);
+        //await delay(25); // Delay of 25 milliseconds
     }
+    console.log("Waiting for the file promises...")
+    Promise.all(filePromises).then(_ => {
+      console.log("File promises completed")
+  
+      uploads.forEach(async (upload) => {
+        console.log("Beginning upload...")
+        // Check if there are any previous uploads to continue.
+        upload.findPreviousUploads().then(function (previousUploads) {
+          // Found previous uploads so we select the first one.
+          if (previousUploads.length) {
+            upload.resumeFromPreviousUpload(previousUploads[0]);
+          }
+          // Start the upload
+          upload.start();
+        });
+        await delay(100);
+      });
+    })
   };
   input.click();
 }
@@ -791,7 +980,7 @@ function cancelUpload(cancelledItemInfo) {
   }
   else {
     cancelledItemInfo.upload.abort(true);
-  }
+  }n
 }
 
 function cancelAllUploads() {
@@ -799,6 +988,38 @@ function cancelAllUploads() {
     cancelUpload(itemInfo);
   }
   itemsBeingUploadedInfo.value = [];
+}
+
+async function getDirectorySize(path) {
+  let textDecoder = new TextDecoder();
+  fetch("/directorySize/" + path).then(async response => {
+    if (!response.ok) {
+      response.text().then(text => {
+        throw new Error(text);
+      })
+    }
+    return response.body;
+  }).then(async body => {
+    const reader = body.getReader();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      const str = textDecoder.decode(value);
+      buffer += str;
+      const lastNewLine = buffer.lastIndexOf('\n');
+      if (lastNewLine === -1) {
+        continue;
+      }
+      const penultimateNewLine = buffer.lastIndexOf('\n', lastNewLine - 1);
+      const json = JSON.parse(buffer.substring(penultimateNewLine + 1, lastNewLine));
+      buffer = buffer.substring(lastNewLine + 1);
+
+      directoryDetails.value = json;
+    }
+  })
 }
 
 function changeSorting(newMode) {
@@ -881,8 +1102,6 @@ function sortFiles() {
     );
   }
 }
-
-let selectedItems = ref([]);
 
 function toggleFileSelected(file) {
   const selectedFileIndex = getFileIndex(selectedItems.value, file);
@@ -984,6 +1203,10 @@ function invertSelection() {
   selectedItems.value = newSelection;
 }
 
+function clearSelection() {
+  selectedItems.value = [];
+}
+
 function cutSelected() {
   clipboard.value = selectedItems.value.map((file) => currentPath.value + file.name);
   itemsBeingCut.value = [...clipboard.value];
@@ -996,7 +1219,7 @@ function copySelected() {
 function pasteSelected() {
   const numCopiedItems = selectedItems.value.length;
   let newSelectionNames = [];
-  selectedItems.value = [];
+  clearSelection()
   clipboard.value.forEach((path) => {
     fetch("/modify/", {
       method: "POST",
@@ -1044,7 +1267,7 @@ function renameSelected() {
     },
     body: JSON.stringify({
       path: currentPath.value + selectedItems.value[0].name,
-      newName: itemNewName.value
+      newName: itemNewName.value.trim()
     })
   }).then(response => {
     if (!response.ok) {
@@ -1065,6 +1288,45 @@ function promptDelete() {
 function deleteSelected() {
   deletePaths(selectedItems.value.map((file) => currentPath.value + file.name));
   isDeleting.value = false;
+}
+
+function openDetails() {
+  isViewingDetails.value = true;
+  directoryDetails.value = {
+    size: -1,
+    numFiles: -1,
+    numSubdirectories: -1
+  };
+  fetch("/details/" + currentPath.value).then(response => {
+    response.json().then(body => {
+      itemDetails.value = body;
+    });
+  })
+  if (selectedItems.value[0].size < 0) {
+    getDirectorySize(currentPath.value + selectedItems.value[0].name);
+  }
+}
+
+function closeDetails() {
+  isViewingDetails.value = false;
+}
+
+function openContextMenu(e, file) {
+  rightClickedItem.value = file;
+
+  if (!selectedItems.value.includes(file)) {
+    clearSelection();
+    toggleFileSelected(file);
+  }
+
+  console.log(e.clientX, e.clientY)
+
+  menuLocation.value = {
+    x: e.clientX,
+    y: e.clientY
+  }
+
+  isRightClickMenuOpen.value = true;
 }
 
 function createNewFolder() {
@@ -1145,7 +1407,7 @@ function copyLink() {
 }
 
 function isDialogOpen() {
-  return isRenaming.value || isDeleting.value || isSharing.value;
+  return isRenaming.value || isDeleting.value || isSharing.value || isViewingDetails.value;
 }
 
 function cancelOperation() {
@@ -1185,13 +1447,13 @@ function areItemsSame(a, b) {
   return a.name === b.name && a.size === b.size && a.lastModified ===b.lastModified;
 }
 
-function getFileSize(file) {
-  if (file.size < 0) {
+function getFileSizeDescription(fileSize) {
+  if (fileSize < 0) {
     return "";
   }
 
   for (const [unit, size] of Object.entries(fileSizeUnits)) {
-    let displayedSize = file.size / size;
+    let displayedSize = fileSize / size;
     if (displayedSize < 1_000) {
       return parseFloat(displayedSize.toFixed(2)).toString() + " " + unit;
     }
@@ -1232,6 +1494,11 @@ function getItemTypeDescription(file) {
   else {
     return "File";
   }
+}
+
+function getItemSizeDescription(item) {
+  const size = item.size > 0 ? item.size : directoryDetails.value.size;
+  return size >= 0 ? `${getFileSizeDescription(size)} (${size} bytes)` : "Loading...";
 }
 
 const drawer = ref(true);
@@ -1304,6 +1571,10 @@ function goBackDirectory() {
   else {
     setCurrentPath(pathParts[pathParts.length - 2]);
   }
+}
+
+function signOut() {
+  window.location.pathname = "/logout";
 }
 
 </script>
