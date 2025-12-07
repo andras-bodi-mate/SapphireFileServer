@@ -66,7 +66,7 @@
             <v-btn width="30" height="30" icon="mdi-home" size="small" variant="text" tabindex="-1" @click="setCurrentPath('')">
             </v-btn>
             <v-breadcrumbs-divider v-if="currentPath !== ''"></v-breadcrumbs-divider>
-            <div v-for="pathPart in getPathSubPaths()">
+            <div class="d-inline-flex" v-for="pathPart in getPathSubPaths()">
               <v-btn height="30" class="text-none" variant="text" rounded="pill" tabindex="-1" style="padding: 0 8px;" @click="setCurrentPath(pathPart)">
                 {{ getPathLastFolder(pathPart) }}
               </v-btn>
@@ -186,229 +186,245 @@
             </div>
           </div>
           <v-divider></v-divider>
-          <v-list-item>
-            <div class="d-flex justify-start mt-2">
-              <span style="flex: 2;">
-                <v-btn
-                  class="text-none"
-                  variant="text"
-                  rounded="pill" 
-                  tabindex="-1"
-                  @click="
-                  delayedChangeSorting(SortingModes.Name);
-                  "
-                >
-                  File Name
-                  <v-icon>
-                    {{ getSortingIcon(SortingModes.Name) }}
-                  </v-icon>
-                </v-btn>
-              </span>
-              <span style="flex: 1;">
-                <v-btn
-                  class="text-none"
-                  variant="text"
-                  rounded="pill"
-                  tabindex="-1"
-                  @click="
-                  delayedChangeSorting(SortingModes.Type);
-                  "
-                >
-                  Type
-                  <v-icon>
-                    {{ getSortingIcon(SortingModes.Type) }}
-                  </v-icon>
-                </v-btn>
-              </span>
-              <span style="flex: 1;">
-                <v-btn
-                  class="text-none"
-                  variant="text"
-                  rounded="pill"
-                  tabindex="-1"
-                  style="flex: 1;"
-                  @click="
-                  delayedChangeSorting(SortingModes.Size);
-                  "
-                >
-                  Size
-                  <v-icon>
-                    {{ getSortingIcon(SortingModes.Size) }}
-                  </v-icon>
-                </v-btn>
-              </span>
-              <span style="flex: 1;">
-                <v-btn
-                  class="text-none"
-                  variant="text"
-                  rounded="pill"
-                  tabindex="-1"
-                  style="flex: 1;"
-                  @click="
-                  delayedChangeSorting(SortingModes.LastModified);
-                  "
-                >
-                  Last Modified
-                  <v-icon>
-                    {{ getSortingIcon(SortingModes.LastModified) }}
-                  </v-icon> 
-                </v-btn>
-              </span>
-            </div>
-          </v-list-item>
-          <v-banner
-          v-if="networkError"
-          class="justify-center text-deep-orange"
-          >
-            <v-icon class="mr-3" size="large">
-              mdi-alert
-            </v-icon>
-            <v-banner-text>
-              Couldn't reach server. This could be because the server is offline or due to bad internet connection.
-            </v-banner-text>
-          </v-banner>
-          <v-banner
-          v-if="sortedItems.length == 0"
-          class="justify-center text-grey"
-          >
-            <v-icon class="mr-3" size="large">
-              mdi-information
-            </v-icon>
-            <v-banner-text>
-              No items to display.
-            </v-banner-text>
-          </v-banner>
-          <v-list-item
-            v-if="sortedItems.length !== 0 && !networkError"
-            v-for="(file, index) in sortedItems"
-            :key="index"
-            :value="file"
-            :active="includesFile(selectedItems, file)"
-            :disabled="itemsBeingCut.includes(currentPath + file.name)"
-            :ref="el => {itemRefs[file.name] = el}"
-            tabindex="-1"
-            color="primary"
-            :style="{
-              borderRadius: getItemBorderRadius(file) + ' !important',
-              transition: 'border-radius 0.2s ease-in-out'
-            }"
-            @click="isLoading ? 0 : delayedToggleFileSelected(file)"
-            @dblclick="isLoading ? 0 : changePath(file)"
-            @contextmenu.prevent="openContextMenu($event, file)"
-            v-shortkey="['enter']"
-            @shortkey="(isLoading || selectedItems.length !== 1 || isDialogOpen()) ? 0 : changePath(selectedItems[0])"
-          >
-            <div style="display: flex; width: 100%; align-items: center;">
-              <div style="flex: 2; display: flex; align-items: center; gap: 8px;">
-                <v-icon :icon="getFileIcon(file)"></v-icon>
-                {{ file.name }}
-              </div>
-
-              <div style="flex: 1;">
-                {{ getItemTypeDescription(file) }}
-              </div>
-
-              <div style="flex: 1;">
-                {{ getFileSizeDescription(file.size) }}
-              </div>
-
-              <div style="flex: 1; justify-self: right;">
-                {{ getItemLastModifiedDate(file) }}
-              </div>
-            </div>
-              <v-menu
-                v-if="rightClickedItem === file"
-                v-model="isRightClickMenuOpen"
-                absolute
-                :close-on-content-click="true"
-                :open-on-click="false"
-                :style="{'position': 'absolute', 'left': `${menuLocation.x}px`, 'top': `${menuLocation.y}px`}"
+          <div class="d-flex w-100 mt-2">
+            <div style="flex: 4">
+              <!--Sorting controls-->
+              <v-list-item>
+                <div class="d-flex justify-start">
+                  <span style="flex: 2;">
+                    <v-btn
+                      class="text-none"
+                      variant="text"
+                      rounded="pill" 
+                      tabindex="-1"
+                      @click="
+                      delayedChangeSorting(SortingModes.Name);
+                      "
+                    >
+                      File Name
+                      <v-icon>
+                        {{ getSortingIcon(SortingModes.Name) }}
+                      </v-icon>
+                    </v-btn>
+                  </span>
+                  <span style="flex: 1;">
+                    <v-btn
+                      class="text-none"
+                      variant="text"
+                      rounded="pill"
+                      tabindex="-1"
+                      @click="
+                      delayedChangeSorting(SortingModes.Type);
+                      "
+                    >
+                      Type
+                      <v-icon>
+                        {{ getSortingIcon(SortingModes.Type) }}
+                      </v-icon>
+                    </v-btn>
+                  </span>
+                  <span style="flex: 1;">
+                    <v-btn
+                      class="text-none"
+                      variant="text"
+                      rounded="pill"
+                      tabindex="-1"
+                      style="flex: 1;"
+                      @click="
+                      delayedChangeSorting(SortingModes.Size);
+                      "
+                    >
+                      Size
+                      <v-icon>
+                        {{ getSortingIcon(SortingModes.Size) }}
+                      </v-icon>
+                    </v-btn>
+                  </span>
+                  <span style="flex: 1;">
+                    <v-btn
+                      class="text-none"
+                      variant="text"
+                      rounded="pill"
+                      tabindex="-1"
+                      style="flex: 1;"
+                      @click="
+                      delayedChangeSorting(SortingModes.LastModified);
+                      "
+                    >
+                      Last Modified
+                      <v-icon>
+                        {{ getSortingIcon(SortingModes.LastModified) }}
+                      </v-icon> 
+                    </v-btn>
+                  </span>
+                </div>
+              </v-list-item>
+              <!--No connection banner-->
+              <v-banner
+              v-if="networkError"
+              class="justify-center text-deep-orange"
               >
-              <v-list class="pa-3" rounded="xl">
-                <v-list-item
-                  class="ma-2"
-                  rounded="pill"
-                  prepend-icon="mdi-open-in-new"
-                  @click="changePath(file)"
-                  :disabled="selectedItems.length !== 1"
-                >
-                  <v-list-item-title>Open</v-list-item-title>
-                </v-list-item>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-share-variant"
-                  @click="promptShare()"
-                  :disabled="selectedItems.length !== 1"
-                >
-                  <v-list-item-title>Share</v-list-item-title>
-                </v-list-item>
-                <v-divider></v-divider>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-content-cut"
-                  @click="cutSelected()"
-                  :disabled="selectedItems.length === 0"
-                >
-                  <v-list-item-title>Cut</v-list-item-title>
-                </v-list-item>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-content-copy"
-                  @click="copySelected()"
-                  :disabled="selectedItems.length === 0"
-                >
-                  <v-list-item-title>Copy</v-list-item-title>
-                </v-list-item>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-content-paste"
-                  @click="pasteSelected()"
-                  :disabled="clipboard.length === 0"
-                >
-                  <v-list-item-title>Paste</v-list-item-title>
-                </v-list-item>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-form-textbox"
-                  @click="promptNewName()"
-                  :disabled="selectedItems.length !== 1"
-                >
-                  <v-list-item-title>Rename</v-list-item-title>
-                </v-list-item>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-delete"
-                  @click="promptDelete()"
-                  :disabled="selectedItems.length === 0"
-                >
-                  <v-list-item-title>Delete</v-list-item-title>
-                </v-list-item>
-                <v-divider></v-divider>
-                <v-list-item
-                  class="ma-2"
-                  size="small"
-                  rounded="pill"
-                  prepend-icon="mdi-information"
-                  @click="openDetails()"
-                  :disabled="selectedItems.length !== 1"
-                >
-                  <v-list-item-title>Details</v-list-item-title>
-                </v-list-item>
-              </v-list>
-            </v-menu>
-          </v-list-item>
+                <v-icon class="mr-3" size="large">
+                  mdi-alert
+                </v-icon>
+                <v-banner-text>
+                  Couldn't reach server. This could be because the server is offline or due to bad internet connection.
+                </v-banner-text>
+              </v-banner>
+              <!--No items to display banner-->
+              <v-banner
+              v-if="sortedItems.length == 0"
+              class="justify-center text-grey"
+              >
+                <v-icon class="mr-3" size="large">
+                  mdi-information
+                </v-icon>
+                <v-banner-text>
+                  No items to display.
+                </v-banner-text>
+              </v-banner>
+              <!--Files-->
+              <v-list-item
+                v-if="sortedItems.length !== 0 && !networkError"
+                v-for="(file, index) in sortedItems"
+                :key="index"
+                :value="file"
+                :active="includesFile(selectedItems, file)"
+                :disabled="itemsBeingCut.includes(currentPath + file.name)"
+                :ref="el => {itemsComponent[file.name] = el}"
+                tabindex="-1"
+                color="primary"
+                :style="{
+                  borderRadius: getItemBorderRadius(file) + ' !important',
+                  transition: 'border-radius 0.2s ease-in-out'
+                }"
+                @click="isLoading ? 0 : delayedToggleFileSelected(file)"
+                @dblclick="isLoading ? 0 : changePath(file)"
+                @contextmenu.prevent="openContextMenu($event, file)"
+                v-shortkey="['enter']"
+                @shortkey="(isLoading || selectedItems.length !== 1 || isDialogOpen()) ? 0 : changePath(selectedItems[0])"
+              >
+                <div style="display: flex; width: 100%; align-items: center;">
+                  <div class="pr-2 ga-2 justify-start" style="flex: 2; align-items: center; white-space: nowrap; overflow-y: hidden; overflow-x: scroll; scrollbar-width: none; text-overflow: ellipsis;">
+                    <v-icon :icon="getFileIcon(file)"></v-icon>
+                    {{ file.name }}
+                  </div>
+
+                  <div class="pl-2 pr-2" style="flex: 1; align-items: center; white-space: nowrap; overflow-y: hidden; overflow-x: scroll; scrollbar-width: none; text-overflow: ellipsis;">
+                    {{ getItemTypeDescription(file) }}
+                  </div>
+
+                  <div class="pl-2 pr-2" style="flex: 1; align-items: center; white-space: nowrap; overflow-y: hidden; overflow-x: scroll; scrollbar-width: none; text-overflow: ellipsis;">
+                    {{ getFileSizeDescription(file.size) }}
+                  </div>
+
+                  <div class="pl-2" style="flex: 1; align-items: center; white-space: nowrap; overflow-y: hidden; overflow-x: scroll; scrollbar-width: none; text-overflow: ellipsis;">
+                    {{ getItemLastModifiedDate(file) }}
+                  </div>
+                </div>
+                  <v-menu
+                    v-if="rightClickedItem === file"
+                    v-model="isRightClickMenuOpen"
+                    absolute
+                    :close-on-content-click="true"
+                    :open-on-click="false"
+                    :style="{'position': 'absolute', 'left': `${menuLocation.x}px`, 'top': `${menuLocation.y}px`}"
+                  >
+                  <v-list density="compact" class="pa-3" rounded="xl">
+                    <v-list-item
+                      rounded="pill"
+                      prepend-icon="mdi-open-in-new"
+                      size="small"
+                      @click="changePath(file)"
+                      :disabled="selectedItems.length !== 1"
+                    >
+                      <v-list-item-title>Open</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-share-variant"
+                      @click="promptShare()"
+                      :disabled="selectedItems.length !== 1"
+                    >
+                      <v-list-item-title>Share</v-list-item-title>
+                    </v-list-item>
+                    <v-divider class="mt-2 mb-2"></v-divider>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-content-cut"
+                      @click="cutSelected()"
+                      :disabled="selectedItems.length === 0"
+                    >
+                      <v-list-item-title>Cut</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-content-copy"
+                      @click="copySelected()"
+                      :disabled="selectedItems.length === 0"
+                    >
+                      <v-list-item-title>Copy</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-content-paste"
+                      @click="pasteSelected()"
+                      :disabled="clipboard.length === 0"
+                    >
+                      <v-list-item-title>Paste</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-form-textbox"
+                      @click="promptNewName()"
+                      :disabled="selectedItems.length !== 1"
+                    >
+                      <v-list-item-title>Rename</v-list-item-title>
+                    </v-list-item>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-delete"
+                      @click="promptDelete()"
+                      :disabled="selectedItems.length === 0"
+                    >
+                      <v-list-item-title>Delete</v-list-item-title>
+                    </v-list-item>
+                    <v-divider class="mt-2 mb-2"></v-divider>
+                    <v-list-item
+                      size="small"
+                      rounded="pill"
+                      prepend-icon="mdi-information"
+                      @click="openDetails()"
+                      :disabled="selectedItems.length !== 1"
+                    >
+                      <v-list-item-title>Details</v-list-item-title>
+                    </v-list-item>
+                  </v-list>
+                </v-menu>
+              </v-list-item>
+            </div>
+            <!--Preview-->
+            <div class="ml-5 mt-3 pa-5 rounded-xl" style="flex: 1; overflow-y: scroll; align-self: flex-start; border: solid 1px #303030">
+              <v-img v-if="imagePreviewUrl !== null || (textPreview === null && codePreview === null)" class="rounded-lg" :src="imagePreviewUrl">
+                <template v-slot:placeholder>
+                  <div class="d-flex align-center justify-center fill-height">
+                    <v-progress-circular
+                      color="grey-lighten-4"
+                      indeterminate
+                    ></v-progress-circular>
+                  </div>
+                </template>
+              </v-img>
+              <p v-if="textPreview !== null" style="user-select: text; -webkit-user-select: text;">{{ textPreview }}</p>
+              <highlightjs v-if="codePreview !== null" style="user-select: text; -webkit-user-select: text; overflow-x: scroll; text-overflow: ellipsis" :language="codePreviewLanguage" :code="codePreview" />
+            </div>
+          </div>
         </v-list>
         <div class="d-flex flex-column align-end justify-end ma-5" style="position: fixed; bottom: 0px; right: 0px;">
           <div class="pa-3">            
@@ -603,8 +619,7 @@ import { ref, toRaw, onMounted, onBeforeUnmount, reactive } from 'vue';
 import { useTheme } from 'vuetify';
 import VueCookies from 'vue-cookies'
 import { getFileIcon, fileExtensionDescriptions } from "./fileIcons.js";
-import { Upload } from 'tus-js-client';
-import { lookup } from 'mime-types';
+import hljs from 'highlight.js';
 
 const theme = useTheme()
 const keysDown = ref(new Set());
@@ -666,7 +681,7 @@ const sortingMode = ref(SortingModes.Name);
 
 const items = ref([]);
 const sortedItems = ref([]);
-const itemRefs = ref({});
+const itemsComponent = ref({});
 const clipboard = ref([]);
 const itemsBeingCut = ref([]);
 const selectedItems = ref([]);
@@ -694,6 +709,10 @@ const isLoading = ref(false);
 const networkError = ref(false);
 const itemDetails = ref({});
 const directoryDetails = ref({});
+const imagePreviewUrl = ref(null);
+const textPreview = ref(null);
+const codePreview = ref(null);
+const codePreviewLanguage = ref(null);
 
 function switchTheme() {
   theme.toggle();
@@ -979,8 +998,10 @@ function cancelUpload(cancelledItemInfo) {
     }
   }
   else {
-    cancelledItemInfo.upload.abort(true);
-  }n
+    if (cancelledItemInfo.upload !== null) {
+      cancelledItemInfo.upload.abort(true);
+    }
+  }
 }
 
 function cancelAllUploads() {
@@ -1061,7 +1082,7 @@ function compareFileNames(nameA, nameB) {
 }
 
 function getFileScreenPosition(file) {
-  const component = itemRefs.value[file.name];
+  const component = itemsComponent.value[file.name];
   if (!component) return 0;
 
   const element = component.$el;
@@ -1126,12 +1147,15 @@ function toggleFileSelected(file) {
 
   }
   else {
-    if (selectedFileIndex === -1) {
+    if (selectedFileIndex === -1 || (selectedFileIndex !== -1 && selectedItems.value.length > 1)) {
       selectedItems.value = [file];
     }
     else {
-      selectedItems.value = selectedItems.value.length > 1 ? [file] : [];
+      selectedItems.value = [];
     }
+  }
+  if (selectedItems.value.length === 1) {
+    getPreview(selectedItems.value[0]);
   }
 }
 
@@ -1327,6 +1351,37 @@ function openContextMenu(e, file) {
   }
 
   isRightClickMenuOpen.value = true;
+}
+
+function getPreview(file) {
+  if (imagePreviewUrl.value !== null) {
+    URL.revokeObjectURL(imagePreviewUrl.value);
+  }
+  imagePreviewUrl.value = null;
+  textPreview.value = null;
+  codePreview.value = null;
+  fetch("/preview/" + currentPath.value + file.name + '?' + new URLSearchParams({ page: "0" }), {
+      method: "GET"
+    }
+  ).then(response => {
+    response.blob().then(async blob => {
+      console.log(blob.type)
+      if (blob.type.includes("image/jpeg")) {
+        imagePreviewUrl.value = URL.createObjectURL(blob);
+      }
+      else if (blob.type.includes("text/plain")) {
+        const originalFileExtension = response.headers.get("X-Original-File-Extension");
+        textPreview.value = await blob.text(), {language: originalFileExtension};
+        if (originalFileExtension !== null) {
+          codePreview.value = textPreview.value;
+          textPreview.value = null;
+          codePreviewLanguage.value = originalFileExtension;
+          console.log(codePreviewLanguage);
+        }
+        console.log(textPreview.value);
+      }
+    })
+  });
 }
 
 function createNewFolder() {

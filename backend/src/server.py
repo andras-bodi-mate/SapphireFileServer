@@ -7,7 +7,6 @@ import json
 from pathlib import Path
 from datetime import datetime, timedelta
 from dataclasses import dataclass
-from time import sleep
 from typing import Generator
 
 from fastapi import FastAPI, Header
@@ -20,9 +19,12 @@ from starlette.middleware.wsgi import WSGIMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp
 from wsgidav.fs_dav_provider import FilesystemProvider
 from tuspyserver import create_tus_router
+from preview_generator.manager import PreviewManager
+from preview_generator.exception import UnsupportedMimeType
 
 from logger import Logger
 from core import Core
+from fileExtensions import FileExtensions
 
 class SharedItem:
     idLength = 64
@@ -54,6 +56,10 @@ class NewItemRequest(BaseModel):
 class ItemShareRequest(BaseModel):
     path: str
     expirationTime: int
+
+class PreviewRequest(BaseModel):
+    path: str
+    page: int
 
 @dataclass
 class DirectoryInfo:
@@ -151,6 +157,7 @@ class Server:
         self.temporaryStorageDirectory = Path(tempfile.mkdtemp(prefix = "SapphireFileServer"))
         self.tusDirectory = self.temporaryStorageDirectory / Path("Tus")
         self.tusLocksDirectory = self.tusDirectory / Path(".locks")
+        self.previewCacheDirectory = self.temporaryStorageDirectory / Path("Previews")
 
         self.app = FastAPI(lifespan = self.lifespan)
         self.davApp = WsgiDAVApp(config = {
@@ -167,12 +174,18 @@ class Server:
                     }
                 }
             },
+            "http_authenticator": {
+                "accept_basic": True,              # enable Basic authentication
+                "accept_digest": False,            # disable Digest (optional, avoids conflicts)
+                "default_to_digest": False
+            },
             "dir_browser": {
                 "enable": True,
                 "response_trailer": False,
             },
             "anonymous_access": True,
         })
+        self.previewManager = PreviewManager(self.previewCacheDirectory, True)
 
         self.sharedItems: list[SharedItem] = []
 
@@ -197,8 +210,8 @@ class Server:
 
         @self.app.get("/download/{requestedPath:path}")
         async def download(requestedPath: str):
-            path = (self.directory / requestedPath).resolve()
-            if not path.is_relative_to(self.directory) or path == self.directory:
+            path = self.directory / requestedPath
+            if isPathInvalid(requestedPath):
                 return {"error": "Invalid path"}
 
             if not path.exists():
@@ -227,7 +240,7 @@ class Server:
         @self.app.get("/files/{requestedPath:path}")
         async def getFiles(requestedPath: str = ""):
             directoryPath = (self.directory / requestedPath).resolve()
-            if not directoryPath.is_relative_to(self.directory):
+            if isPathInvalid(directoryPath):
                 return {"error": "Invalid path"}
             if not directoryPath.exists():
                 return {"error": "Directory doesn't exist"}
@@ -238,7 +251,7 @@ class Server:
                     "size": path.stat().st_size if path.is_file() else -1,
                     "lastModified": path.stat().st_mtime_ns / 1_000_000_000,
                 }
-                for path in (self.directory / requestedPath).iterdir()
+                for path in directoryPath.iterdir()
                 if path.absolute() == path.resolve()
             ]
 
@@ -248,7 +261,7 @@ class Server:
                 case "copy":
                     sourcePath = (self.directory / request.source).resolve()
                     destinationPath: Path = (self.directory / request.destination).resolve()
-                    if not (sourcePath.is_relative_to(self.directory) and destinationPath.is_relative_to(self.directory)):
+                    if isPathInvalid(sourcePath) or isPathInvalid(destinationPath):
                         return {"error": "Invalid path"}
                     
                     if sourcePath.exists():
@@ -271,7 +284,7 @@ class Server:
                     if len(request.newName) == 0:
                         return {"error": "New name must have a length greater than zero"}
                     path: Path = (self.directory / request.path).resolve()
-                    if not path.is_relative_to(self.directory):
+                    if isPathInvalid(path):
                         return {"error": "Invalid path"}
 
                     if path.exists():
@@ -286,7 +299,7 @@ class Server:
                 case "delete":
                     paths: list[Path] = [(self.directory / path).resolve() for path in request.paths]
                     for path in paths:
-                        if not path.is_relative_to(self.directory):
+                        if isPathInvalid(path):
                             return {"error": "Invalid path"}
                         
                         if path.exists():
@@ -300,7 +313,7 @@ class Server:
                 
                 case "newFolder":
                     path = (self.directory / request.path / Path("New Folder")).resolve()
-                    if not path.is_relative_to(self.directory):
+                    if isPathInvalid(path):
                         return {"error": "Invalid path"}
 
                     while path.exists():
@@ -310,7 +323,7 @@ class Server:
 
                 case "newFile":
                     path = (self.directory / request.path / Path("New File")).resolve()
-                    if not path.is_relative_to(self.directory):
+                    if isPathInvalid(path):
                         return {"error": "Invalid path"}
 
                     while path.exists():
@@ -334,6 +347,8 @@ class Server:
         @self.app.post("/share/")
         async def share(itemShareRequest: ItemShareRequest):
             path = self.directory / itemShareRequest.path
+            if isPathInvalid(path):
+                return {"error": "Invalid path"}
             if not path.exists():
                 return {"error": "Specified path does not exist"}
             if path.is_dir():
@@ -350,6 +365,10 @@ class Server:
         @self.app.get("/details/{path:path}")
         async def details(path: str):
             path: Path = self.directory / Path(path)
+            if isPathInvalid(path):
+                return {"error": "Invalid path"}
+            if not path.exists():
+                return {"error": "Path doesn't exist"}
             stats = path.stat()
             return {
                 "created": stats.st_ctime,
@@ -360,7 +379,43 @@ class Server:
         @self.app.get("/directorySize/{path:path}")
         async def directorySize(path: str):
             path: Path = self.directory / Path(path)
+            if isPathInvalid(path):
+                return {"error": "Invalid path"}
+            if not path.is_dir():
+                return {"error": "Path is not a directory"}
+            if not path.exists():
+                return {"error": "Directory not found"}
             return StreamingResponse(Server.getDirectoryInfoThrottled(path), media_type = "application/json")
+
+        @self.app.get("/preview/{path:path}")
+        async def preview(path: str, page: int = -1):
+            txtVersionPath = self.previewCacheDirectory / "txtVersions" / Path(path).with_suffix(".txt")
+            path: Path = self.directory / path
+            if isPathInvalid(path):
+                return {"error": "Invalid path"}
+            if not path.is_file():
+                return {"error": "Path is not a file"}
+            if not path.exists():
+                return {"error": "File not found"}
+            if path.suffix[1:] == "txt":
+                return FileResponse(path.as_posix(), media_type = "text/plain")
+            if path.suffix[1:] in FileExtensions.documentFileExtensions:
+                shutil.copy(path, txtVersionPath)
+                previewPath = self.previewManager.get_text_preview(txtVersionPath.as_posix())
+                return FileResponse(path.as_posix(), media_type = "text/plain")
+            elif path.suffix[1:] in FileExtensions.codeFileExtensions:
+                txtVersionPath.parent.mkdir(parents = True, exist_ok = True)
+                txtVersionPath.touch()
+                shutil.copy(path, txtVersionPath)
+                response = FileResponse(txtVersionPath, media_type = "text/plain")
+                response.headers["X-Original-File-Extension"] = path.suffix[1:]
+                return response
+            else:
+                previewPath = self.previewManager.get_jpeg_preview(path.as_posix(), page, height = 1024)
+                return FileResponse(previewPath, media_type = "image/jpeg")
+
+        def isPathInvalid(path: str | Path):
+            return not Path(path).is_relative_to(self.directory)
 
         def validateUpload(metadata: dict, uploadInfo: dict):
             if "filename" not in metadata or "directory" not in metadata:
@@ -391,5 +446,6 @@ class Server:
 
     def lifespan(self, app: FastAPI):
         yield
+        Logger.logInfo("Cleaning up temporary directory...")
         shutil.rmtree(self.temporaryStorageDirectory)
-        Logger.logInfo("Cleaning up temporary directory")
+        Logger.logInfo("Successfully cleaned up temporary directory")

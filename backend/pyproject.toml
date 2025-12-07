@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi[standard]>=0.116.1",
+    "preview-generator[cairosvg,video]>=0.29",
     "sty>=1.0.6",
     "tuspyserver>=4.2.3",
     "uvicorn>=0.35.0",

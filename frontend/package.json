@@ -15,6 +15,9 @@
     "vuetify": "^3.9.5"
   },
   "dependencies": {
+    "@highlightjs/vue-plugin": "^2.1.0",
+    "comlink": "^4.4.2",
+    "highlight.js": "^11.11.1",
     "mime-types": "^3.0.1",
     "path-browserify": "^1.0.1",
     "tus-js-client": "^4.3.1",
