@@ -21,10 +21,18 @@ from wsgidav.fs_dav_provider import FilesystemProvider
 from tuspyserver import create_tus_router
 from preview_generator.manager import PreviewManager
 from preview_generator.exception import UnsupportedMimeType
+from tinytag import TinyTag
+from pymediainfo import MediaInfo
 
 from logger import Logger
 from core import Core
 from fileExtensions import FileExtensions
+
+class PathCriteria:
+    isFile = 1 << 0
+    isDirectory = 1 << 1
+    doesntExist = 1 << 2
+    exists = 1 << 3
 
 class SharedItem:
     idLength = 64
@@ -211,39 +219,26 @@ class Server:
         @self.app.get("/download/{requestedPath:path}")
         async def download(requestedPath: str):
             path = self.directory / requestedPath
-            if isPathInvalid(requestedPath):
-                return {"error": "Invalid path"}
+            validatePath(path, PathCriteria.exists)
 
-            if not path.exists():
-                return {"error": "File not found"}
-            
             if path.is_file():
-                if path.exists():
-                    return FileResponse(path)
-                else:
-                    return {"error": "File doesn't exist"}
+                return FileResponse(path)
                 
             elif path.is_dir():
-                if path.exists():
-                    archivePath = (self.temporaryStorageDirectory / path).with_suffix(".zip")
-                    if archivePath.exists():
-                        archivePath.unlink()
-                    print("zipping...")
-                    with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
-                        Server.addDirectoryToArchive(archive, path)
-                    print("zipped at", archivePath.as_posix())
-                    return FileResponse(archivePath)
-                else:
-                    return {"error": "Directory doesn't exist"}
+                archivePath = (self.temporaryStorageDirectory / path).with_suffix(".zip")
+                if archivePath.exists():
+                    archivePath.unlink()
+                print("zipping...")
+                with zipfile.ZipFile(archivePath, "w", zipfile.ZIP_STORED) as archive:
+                    Server.addDirectoryToArchive(archive, path)
+                print("zipped at", archivePath.as_posix())
+                return FileResponse(archivePath)
 
         @self.app.get("/files/")
         @self.app.get("/files/{requestedPath:path}")
         async def getFiles(requestedPath: str = ""):
-            directoryPath = (self.directory / requestedPath).resolve()
-            if isPathInvalid(directoryPath):
-                return {"error": "Invalid path"}
-            if not directoryPath.exists():
-                return {"error": "Directory doesn't exist"}
+            path = (self.directory / requestedPath).resolve()
+            validatePath(path, PathCriteria.isDirectory | PathCriteria.exists)
             
             return [
                 {
@@ -251,7 +246,7 @@ class Server:
                     "size": path.stat().st_size if path.is_file() else -1,
                     "lastModified": path.stat().st_mtime_ns / 1_000_000_000,
                 }
-                for path in directoryPath.iterdir()
+                for path in path.iterdir()
                 if path.absolute() == path.resolve()
             ]
 
@@ -261,60 +256,45 @@ class Server:
                 case "copy":
                     sourcePath = (self.directory / request.source).resolve()
                     destinationPath: Path = (self.directory / request.destination).resolve()
-                    if isPathInvalid(sourcePath) or isPathInvalid(destinationPath):
-                        return {"error": "Invalid path"}
+                    validatePath(path, PathCriteria.exists)
+                    validatePath(destinationPath, PathCriteria.isDirectory | PathCriteria.exists)
                     
-                    if sourcePath.exists():
-                        if destinationPath.exists() and destinationPath.is_dir():
-                            destinationPath = destinationPath / sourcePath.name
-                            while destinationPath.exists():
-                                destinationPath = destinationPath.with_stem(Server.getAlteredName(destinationPath.stem))
+                    destinationPath = destinationPath / sourcePath.name
+                    while destinationPath.exists():
+                        destinationPath = destinationPath.with_stem(Server.getAlteredName(destinationPath.stem))
 
-                            if sourcePath.is_file():
-                                shutil.copy(sourcePath, destinationPath)
-                            elif sourcePath.is_dir():
-                                shutil.copytree(sourcePath, destinationPath)
-                            return {"name": destinationPath.name}
-                        else:
-                            return {"error": "Destination path does not exist or is not a directory"}
-                    else:
-                        return {"error": "Source path does not exist"}
+                    if sourcePath.is_file():
+                        shutil.copy(sourcePath, destinationPath)
+                    elif sourcePath.is_dir():
+                        shutil.copytree(sourcePath, destinationPath)
+                    return {"name": destinationPath.name}
                 
                 case "rename":
                     if len(request.newName) == 0:
                         return {"error": "New name must have a length greater than zero"}
                     path: Path = (self.directory / request.path).resolve()
-                    if isPathInvalid(path):
-                        return {"error": "Invalid path"}
+                    validatePath(path, PathCriteria.exists)
 
-                    if path.exists():
-                        newPath = path.with_name(request.newName)
-                        if newPath.exists():
-                            return {"error": "There is already a file with that name in the directory"}
-                        path.rename(newPath)
-                        return {"newPath": newPath.relative_to(self.directory).as_posix()}
-                    else:
-                        return {"error": "Path does not exist"}
+                    newPath = path.with_name(request.newName)
+                    if newPath.exists():
+                        return {"error": "There is already a file with that name in the directory"}
+                    path.rename(newPath)
+                    return {"newPath": newPath.relative_to(self.directory).as_posix()}
                     
                 case "delete":
                     paths: list[Path] = [(self.directory / path).resolve() for path in request.paths]
                     for path in paths:
-                        if isPathInvalid(path):
-                            return {"error": "Invalid path"}
+                        validatePath(path, PathCriteria.exists)
                         
-                        if path.exists():
-                            if path.is_file():
-                                path.unlink()
-                            elif path.is_dir():
-                                shutil.rmtree(path)
-                        else:
-                            return {"error": "One of the specified paths does not exist"}
+                        if path.is_file():
+                            path.unlink()
+                        elif path.is_dir():
+                            shutil.rmtree(path)
                     return {"paths": paths}
                 
                 case "newFolder":
                     path = (self.directory / request.path / Path("New Folder")).resolve()
-                    if isPathInvalid(path):
-                        return {"error": "Invalid path"}
+                    validatePath(path)
 
                     while path.exists():
                         path = path.with_stem(Server.getAlteredName(path.stem))
@@ -323,8 +303,7 @@ class Server:
 
                 case "newFile":
                     path = (self.directory / request.path / Path("New File")).resolve()
-                    if isPathInvalid(path):
-                        return {"error": "Invalid path"}
+                    validatePath(path)
 
                     while path.exists():
                         path = path.with_stem(Server.getAlteredName(path.stem))
@@ -347,10 +326,7 @@ class Server:
         @self.app.post("/share/")
         async def share(itemShareRequest: ItemShareRequest):
             path = self.directory / itemShareRequest.path
-            if isPathInvalid(path):
-                return {"error": "Invalid path"}
-            if not path.exists():
-                return {"error": "Specified path does not exist"}
+            validatePath(path, PathCriteria.exists)
             if path.is_dir():
                 archivePath = (self.temporaryStorageDirectory / "sharedDirectories" / itemShareRequest.path).with_suffix(".zip")
                 archivePath.parent.mkdir(parents = True, exist_ok = True)
@@ -365,10 +341,7 @@ class Server:
         @self.app.get("/details/{path:path}")
         async def details(path: str):
             path: Path = self.directory / Path(path)
-            if isPathInvalid(path):
-                return {"error": "Invalid path"}
-            if not path.exists():
-                return {"error": "Path doesn't exist"}
+            validatePath(path, PathCriteria.exists)
             stats = path.stat()
             return {
                 "created": stats.st_ctime,
@@ -379,30 +352,21 @@ class Server:
         @self.app.get("/directorySize/{path:path}")
         async def directorySize(path: str):
             path: Path = self.directory / Path(path)
-            if isPathInvalid(path):
-                return {"error": "Invalid path"}
-            if not path.is_dir():
-                return {"error": "Path is not a directory"}
-            if not path.exists():
-                return {"error": "Directory not found"}
+            validatePath(path, PathCriteria.isDirectory | PathCriteria.exists)
             return StreamingResponse(Server.getDirectoryInfoThrottled(path), media_type = "application/json")
 
         @self.app.get("/preview/{path:path}")
         async def preview(path: str, page: int = -1):
             txtVersionPath = self.previewCacheDirectory / "txtVersions" / Path(path).with_suffix(".txt")
             path: Path = self.directory / path
-            if isPathInvalid(path):
-                return {"error": "Invalid path"}
-            if not path.is_file():
-                return {"error": "Path is not a file"}
-            if not path.exists():
-                return {"error": "File not found"}
+            validatePath(path, PathCriteria.isFile | PathCriteria.exists)
             if path.suffix[1:] == "txt":
                 return FileResponse(path.as_posix(), media_type = "text/plain")
-            if path.suffix[1:] in FileExtensions.documentFileExtensions:
+            if path.suffix[1:] in FileExtensions.documentFileExtensions or not path.suffix[1:]:
+                txtVersionPath.parent.mkdir(parents = True, exist_ok = True)
+                txtVersionPath.touch()
                 shutil.copy(path, txtVersionPath)
-                previewPath = self.previewManager.get_text_preview(txtVersionPath.as_posix())
-                return FileResponse(path.as_posix(), media_type = "text/plain")
+                return FileResponse(txtVersionPath.as_posix(), media_type = "text/plain")
             elif path.suffix[1:] in FileExtensions.codeFileExtensions:
                 txtVersionPath.parent.mkdir(parents = True, exist_ok = True)
                 txtVersionPath.touch()
@@ -411,11 +375,62 @@ class Server:
                 response.headers["X-Original-File-Extension"] = path.suffix[1:]
                 return response
             else:
-                previewPath = self.previewManager.get_jpeg_preview(path.as_posix(), page, height = 1024)
+                if self.previewManager.has_jpeg_preview(path.as_posix()):
+                    previewPath = self.previewManager.get_jpeg_preview(path.as_posix(), page, height = 1024)
+                elif self.previewManager.has_pdf_preview(path.as_posix()):
+                    pdfPath = self.previewManager.get_pdf_preview(path.as_posix(), page)
+                    previewPath = self.previewManager.get_jpeg_preview(pdfPath, page, height = 1024)
+                else:
+                    return HTTPException(400, "Couldn't generate preview")
                 return FileResponse(previewPath, media_type = "image/jpeg")
 
-        def isPathInvalid(path: str | Path):
-            return not Path(path).is_relative_to(self.directory)
+        @self.app.get("/metadata/{path:path}")
+        async def metadata(path: str):
+            path: Path = self.directory / path
+            validatePath(path, PathCriteria.isFile | PathCriteria.exists)
+            if TinyTag.is_supported(path):
+                data = TinyTag.get(path)
+                return data.as_dict()
+            else:
+                mediaInfo = MediaInfo.parse(path.as_posix())
+                data = mediaInfo.to_data()["tracks"]
+                if len(data) <= 1:
+                    return {"error": "Couldn't retrieve any additional metadata"}
+                
+                data = data[1:]
+                mainContainer = data[0]
+                duration = mainContainer.get("duration", None)
+                width = mainContainer.get("width", None)
+                height = mainContainer.get("height", None)
+                if duration:
+                    duration = str(timedelta(seconds = float(duration)/1000))
+                info = {
+                    "general": {
+                        "Duration": duration,
+                        "Resolution": f"{width} x {height}" if width and height else None,
+                        "Bit rate": mainContainer.get("bit_rate", None),
+                        "Color space": mainContainer.get("color_space", None),
+                        "Bit depth": mainContainer.get("bit_depth", None)
+                    },
+                    "all": data
+                }
+                return info
+
+        def validatePath(path: str | Path, criteria: int = 0):
+            if not Path(path).is_relative_to(self.directory):
+                raise HTTPException(400, "Invalid path")
+            
+            if criteria & PathCriteria.isFile and not Path(path).is_file():
+                raise HTTPException(400, "Path is not a file")
+            
+            if criteria & PathCriteria.isDirectory and not Path(path).is_dir():
+                raise HTTPException(400, "Path is not a directory")
+        
+            if criteria & PathCriteria.exists and not Path(path).exists():
+                raise HTTPException(400, "Path doesn't exist")
+            
+            if criteria & PathCriteria.doesntExist and Path(path).exists():
+                raise HTTPException(400, "Path already exists")
 
         def validateUpload(metadata: dict, uploadInfo: dict):
             if "filename" not in metadata or "directory" not in metadata:
