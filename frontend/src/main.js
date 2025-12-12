@@ -1,7 +1,8 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import shortkey from 'vue3-shortkey'
-import hljsVuePlugin from "@highlightjs/vue-plugin";
+import 'highlight.js/lib/common'
+import hljsVuePlugin from "@highlightjs/vue-plugin"
 
 import 'vuetify/styles'
 import { createVuetify } from 'vuetify'
@@ -15,6 +16,6 @@ const vuetify = createVuetify({
 
 createApp(App)
   .use(vuetify)
-  .use(shortkey, {prevent: ["input", "textarea"]})
+  .use(shortkey, { prevent: ["input", "textarea"] })
   .use(hljsVuePlugin)
   .mount('#app')

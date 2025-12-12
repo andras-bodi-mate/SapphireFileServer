@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import HTTPException
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 from starlette.middleware.wsgi import WSGIMiddleware
 from wsgidav.wsgidav_app import WsgiDAVApp
@@ -254,19 +255,19 @@ class Server:
         async def modify(request: CopyRequest | RenameRequest | DeleteRequest | NewItemRequest, mode: str = Header(...)):
             match mode:
                 case "copy":
-                    sourcePath = (self.directory / request.source).resolve()
+                    path = (self.directory / request.source).resolve()
                     destinationPath: Path = (self.directory / request.destination).resolve()
                     validatePath(path, PathCriteria.exists)
                     validatePath(destinationPath, PathCriteria.isDirectory | PathCriteria.exists)
                     
-                    destinationPath = destinationPath / sourcePath.name
+                    destinationPath = destinationPath / path.name
                     while destinationPath.exists():
                         destinationPath = destinationPath.with_stem(Server.getAlteredName(destinationPath.stem))
 
-                    if sourcePath.is_file():
-                        shutil.copy(sourcePath, destinationPath)
-                    elif sourcePath.is_dir():
-                        shutil.copytree(sourcePath, destinationPath)
+                    if path.is_file():
+                        shutil.copy(path, destinationPath)
+                    elif path.is_dir():
+                        shutil.copytree(path, destinationPath)
                     return {"name": destinationPath.name}
                 
                 case "rename":
@@ -375,12 +376,21 @@ class Server:
                 response.headers["X-Original-File-Extension"] = path.suffix[1:]
                 return response
             else:
-                if self.previewManager.has_jpeg_preview(path.as_posix()):
-                    previewPath = self.previewManager.get_jpeg_preview(path.as_posix(), page, height = 1024)
-                elif self.previewManager.has_pdf_preview(path.as_posix()):
-                    pdfPath = self.previewManager.get_pdf_preview(path.as_posix(), page)
-                    previewPath = self.previewManager.get_jpeg_preview(pdfPath, page, height = 1024)
-                else:
+                try:
+                    if self.previewManager.has_jpeg_preview(path.as_posix()):
+                        previewPath = await run_in_threadpool(
+                            lambda: self.previewManager.get_jpeg_preview(path.as_posix(), page, height = 1024)
+                        )
+                    elif self.previewManager.has_pdf_preview(path.as_posix()):
+                        pdfPath = await run_in_threadpool(
+                            lambda: self.previewManager.get_pdf_preview(path.as_posix(), page)
+                        )
+                        previewPath = await run_in_threadpool(
+                            lambda: self.previewManager.get_jpeg_preview(pdfPath, page, height = 1024)
+                        )
+                    else:
+                        return HTTPException(400, "Couldn't generate preview")
+                except UnsupportedMimeType:
                     return HTTPException(400, "Couldn't generate preview")
                 return FileResponse(previewPath, media_type = "image/jpeg")
 
@@ -393,24 +403,35 @@ class Server:
                 return data.as_dict()
             else:
                 mediaInfo = MediaInfo.parse(path.as_posix())
-                data = mediaInfo.to_data()["tracks"]
+                data: list = mediaInfo.to_data()["tracks"]
                 if len(data) <= 1:
                     return {"error": "Couldn't retrieve any additional metadata"}
                 
                 data = data[1:]
-                mainContainer = data[0]
-                duration = mainContainer.get("duration", None)
-                width = mainContainer.get("width", None)
-                height = mainContainer.get("height", None)
+                mainStream = data[0]
+                duration = mainStream.get("duration", None)
+                width = mainStream.get("width", None)
+                height = mainStream.get("height", None)
+                videoCodec = mainStream.get("format", None)
+                videoCodecDescription = mainStream.get("format_info", None)
+                videoCodecInfo = (f"{videoCodec} ({videoCodecDescription})" if videoCodecDescription else videoCodec) if videoCodec else None
+                if len(data) >= 2:
+                    audioStream = data[1]
+                    audioFormat = audioStream.get("format", None)
+                    audioFormatDescription = audioStream.get("format_info", None)
+                    audioFormatInfo = (f"{audioFormat} ({audioFormatDescription})" if audioFormatDescription else audioFormat) if audioFormat else None
+
                 if duration:
                     duration = str(timedelta(seconds = float(duration)/1000))
                 info = {
                     "general": {
                         "Duration": duration,
                         "Resolution": f"{width} x {height}" if width and height else None,
-                        "Bit rate": mainContainer.get("bit_rate", None),
-                        "Color space": mainContainer.get("color_space", None),
-                        "Bit depth": mainContainer.get("bit_depth", None)
+                        "Bit rate": mainStream.get("bit_rate", None),
+                        "Color space": mainStream.get("color_space", None),
+                        "Bit depth": mainStream.get("bit_depth", None),
+                        "Video codec": videoCodecInfo,
+                        "Audio format": audioFormatInfo
                     },
                     "all": data
                 }

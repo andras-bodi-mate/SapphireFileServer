@@ -772,21 +772,25 @@
                 <p
                   v-else-if="textPreview !== null"
                   class="ma-5"
-                  style="user-select: text; -webkit-user-select: text; overflow-x: scroll; text-overflow: ellipsis; white-space: pre-line;"
+                  style="
+                    user-select: text;
+                    -webkit-user-select: text;
+                    overflow: scroll;
+                    white-space: pre-line;
+                  "
                 >
                   {{ textPreview }}
                 </p>
                 <highlightjs
                   v-else-if="codePreview !== null"
-                  class="ma-5"
                   style="
                     user-select: text;
                     -webkit-user-select: text;
-                    overflow-x: scroll;
-                    text-overflow: ellipsis;
+                    overflow: scroll;
                   "
                   :language="codePreviewLanguage"
                   :code="codePreview"
+                  :key="codePreviewHighlightKey"
                 />
               </div>
             </transition>
@@ -1168,6 +1172,7 @@ import hljs from "highlight.js";
 import Fuse from "fuse.js";
 import { Upload } from "tus-js-client";
 import { lookup } from "mime-types";
+import 'highlight.js/lib/common';
 
 const theme = useTheme();
 const keysDown = ref(new Set());
@@ -1262,13 +1267,17 @@ const imagePreviewUrl = ref(null);
 const textPreview = ref(null);
 const codePreview = ref(null);
 const codePreviewLanguage = ref(null);
+const codePreviewHighlightKey = ref(0);
 const isLoadingPreview = ref(false);
 const searchQuery = ref("");
 const itemGeneralInfo = ref(null);
 const itemMetadata = ref(null);
+const darkTheme = "tokyo-night-dark";
+const lightTheme = "stackoverflow-light";
 
 function switchTheme() {
   theme.toggle();
+  setSyntaxHighlightingTheme(theme.current.value.dark ? darkTheme : lightTheme);
   VueCookies.set("app.themeCookie", theme.current.value.dark);
 }
 
@@ -2085,9 +2094,7 @@ function getPreview(file) {
             codePreview.value = textPreview.value;
             textPreview.value = null;
             codePreviewLanguage.value = originalFileExtension;
-            console.log(codePreviewLanguage);
           }
-          console.log(textPreview.value);
         }
         isLoadingPreview.value = false;
       });
@@ -2422,6 +2429,16 @@ function handleNavigationDrawerClick(item) {
   }
 }
 
+function setSyntaxHighlightingTheme(theme) {
+  console.log("Setting highlight theme to", theme);
+  const link = document.getElementById("hljs-theme");
+  link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${theme}.min.css`;
+  link.onload = () => {
+    codePreviewHighlightKey.value++;
+    console.log("Loaded", theme);
+  }
+}
+
 </script>
 
 <script>
@@ -2439,11 +2456,12 @@ export default {
   align-self: flex-start;
   min-width: 0;
   /* required for flex shrink */
-  overflow: hidden;
+  overflow: scroll;
   /* ensures nice collapse */
-  border: solid 1px #303030;
+  border: solid 1px rgba(var(--v-border-color), var(--v-border-opacity));
   /* you can Tailwind this too if you want */
   max-width: 100%;
+  max-height: 100vh;
   /* or 100%, or clamp(), or via CSS var */
 }
 

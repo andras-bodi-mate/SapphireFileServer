@@ -43,7 +43,14 @@ class FileExtensions:
         "ex",
         "exs",
         "erl",
-        "hrl"
+        "hrl",
+        "ino",
+        "json",
+        "yaml",
+        "yml",
+        "xml",
+        "md",
+        "sql",
     ]
 
     documentFileExtensions = [
@@ -51,16 +58,10 @@ class FileExtensions:
         "log",
         "csv",
         "tsv",
-        "json",
-        "xml",
-        "yaml",
-        "yml",
         "ini",
-        "md",
         "tex",
         "srt",
         "vtt",
         "po",
         "conf",
-        "sql",
     ]
