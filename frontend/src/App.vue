@@ -139,39 +139,61 @@
           style="user-select: none"
           rounded="xl"
         >
-          <div class="d-flex justify-space-between">
-            <v-breadcrumbs id="path">
-              <v-btn
-                width="30"
-                height="30"
-                icon="mdi-home"
-                size="small"
-                variant="text"
-                tabindex="-1"
-                @click="setCurrentPath('')"
+          <!--Current path and search-->
+          <div class="d-flex justify-space-between mb-2">
+            <v-text-field
+              ref="pathField"
+              v-model="editablePath"
+              size="small"
+              label=""
+              density="compact"
+              rounded="pill"
+              hide-details
+              single-line
+              class="no-underline no-text-field-data-padding rounded-pill w-100 pt-0 pb-0 pl-2 mr-8"
+              :input-class="!isEditingPath ? 'text-transparent caret-transparent' : ''"
+              @focus="focusedPathEditField()"
+              @blur="setEditedPath()"
+            >
+              <v-breadcrumbs
+                v-if="!isEditingPath"
+                id="path"
+                class="pa-0"
+                @mousedown.stop
+                @click.stop
               >
-              </v-btn>
-              <v-breadcrumbs-divider
-                v-if="currentPath !== ''"
-              ></v-breadcrumbs-divider>
-              <div class="d-inline-flex" v-for="pathPart in getPathSubPaths()">
                 <v-btn
+                  width="30"
                   height="30"
-                  class="text-none"
+                  icon="mdi-home"
+                  size="small"
                   variant="text"
-                  rounded="pill"
                   tabindex="-1"
-                  style="padding: 0 8px"
-                  @click="setCurrentPath(pathPart)"
+                  @click.stop.prevent="setCurrentPath('')"
                 >
-                  {{ getPathLastFolder(pathPart) }}
                 </v-btn>
                 <v-breadcrumbs-divider
-                  style="padding-top: 2px"
+                  v-if="currentPath !== ''"
                 ></v-breadcrumbs-divider>
-              </div>
-            </v-breadcrumbs>
-            <div class="mt-2" style="width: 400px">
+                <div class="d-inline-flex" v-for="pathPart in getPathSubPaths()">
+                  <v-btn
+                    height="30"
+                    class="text-none"
+                    variant="text"
+                    rounded="pill"
+                    tabindex="-1"
+                    style="padding: 0 8px"
+                    @click.stop.prevent="setCurrentPath(pathPart)"
+                  >
+                    {{ getPathLastFolder(pathPart) }}
+                  </v-btn>
+                  <v-breadcrumbs-divider
+                    style="padding-top: 2px"
+                  ></v-breadcrumbs-divider>
+                </div>
+              </v-breadcrumbs>
+            </v-text-field>
+            <div style="max-width: 400px; min-width: 200px">
               <v-text-field
                 v-model="searchQuery"
                 size="small"
@@ -1164,11 +1186,10 @@
 </template>
 
 <script setup>
-import { ref, toRaw, onMounted, onBeforeUnmount, reactive } from "vue";
+import { ref, reactive, computed, toRaw, onMounted, onBeforeUnmount, nextTick } from "vue";
 import { useTheme } from "vuetify";
 import VueCookies from "vue-cookies";
 import { getFileIcon, fileExtensionDescriptions } from "./fileIcons.js";
-import hljs from "highlight.js";
 import Fuse from "fuse.js";
 import { Upload } from "tus-js-client";
 import { lookup } from "mime-types";
@@ -1226,6 +1247,8 @@ const SortingModes = {
   Search: 4,
 };
 
+const darkTheme = "tokyo-night-dark";
+const lightTheme = "stackoverflow-light";
 const currentPage = ref(Pages.MyFiles);
 const rail = ref(true);
 const sortingOrder = ref(SortingOrders.Ascending);
@@ -1272,8 +1295,18 @@ const isLoadingPreview = ref(false);
 const searchQuery = ref("");
 const itemGeneralInfo = ref(null);
 const itemMetadata = ref(null);
-const darkTheme = "tokyo-night-dark";
-const lightTheme = "stackoverflow-light";
+const isEditingPath = ref(false);
+const editedPath = ref("");
+const pathField = ref(null);
+
+const editablePath = computed({
+  get() {
+    return isEditingPath.value ? editedPath.value : '';
+  },
+  set(val) {
+    editedPath.value = val;
+  }
+});
 
 function switchTheme() {
   theme.toggle();
@@ -2347,6 +2380,28 @@ function changePath(file) {
   }
 }
 
+async function focusedPathEditField() {
+  editedPath.value = currentPath.value;
+  isEditingPath.value = true;
+
+  await nextTick();
+
+  const input = pathField.value?.$el?.querySelector('input')
+  input?.select()
+}
+
+function setEditedPath() {
+  if (editedPath.value.length !== 0 && editedPath.value.charAt(editedPath.value.length - 1) !== '/') {
+      setCurrentPath(editedPath.value + '/');
+    }
+    else {
+      if (editedPath.value !== currentPath.value) {
+        setCurrentPath(editedPath.value);
+      }
+    }
+  isEditingPath.value = false;
+}
+
 function getItemBorderRadius(file) {
   if (selectedItems.value.findIndex((f) => areItemsSame(f, file)) === -1) {
     return "25px 25px 25px 25px";
@@ -2490,5 +2545,11 @@ export default {
 .no-underline .v-field__underlined::before,
 .no-underline .v-field__underlined::after {
   display: none !important;
+}
+
+.no-text-field-data-padding .v-field__input {
+  padding: 0;
+  padding-left: 6px;
+  overflow-x: scroll;
 }
 </style>

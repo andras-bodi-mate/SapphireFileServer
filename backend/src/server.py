@@ -420,6 +420,8 @@ class Server:
                     audioFormat = audioStream.get("format", None)
                     audioFormatDescription = audioStream.get("format_info", None)
                     audioFormatInfo = (f"{audioFormat} ({audioFormatDescription})" if audioFormatDescription else audioFormat) if audioFormat else None
+                else:
+                    audioFormatInfo = None
 
                 if duration:
                     duration = str(timedelta(seconds = float(duration)/1000))
