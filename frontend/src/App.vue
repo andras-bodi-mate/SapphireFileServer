@@ -687,81 +687,89 @@
                     top: `${menuLocation.y}px`,
                   }"
                 >
-                  <v-list density="compact" class="pa-3" rounded="xl">
-                    <v-list-item
+                  <v-list class="pa-3 d-flex flex-column align-stretch" density="compact" rounded="xl">
+                    <v-btn
+                      class="text-none w-100 justify-start"
+                      :prepend-icon="(selectedItems.length === 1 && selectedItems[0].size < 0) ? 'mdi-arrow-right-bottom' : 'mdi-open-in-new'"
+                      variant="text"
                       rounded="pill"
-                      prepend-icon="mdi-open-in-new"
-                      size="small"
                       @click="changePath(file)"
                       :disabled="selectedItems.length !== 1"
                     >
-                      <v-list-item-title>Open</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                      Open
+                    </v-btn>
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-share-variant"
+                      variant="text"
+                      rounded="pill"
                       @click="promptShare()"
                       :disabled="selectedItems.length !== 1"
                     >
-                      <v-list-item-title>Share</v-list-item-title>
-                    </v-list-item>
+                      Share
+                    </v-btn>
                     <v-divider class="mt-2 mb-2"></v-divider>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-content-cut"
+                      rounded="pill"
+                      variant="text"
                       @click="cutSelected()"
                       :disabled="selectedItems.length === 0"
                     >
-                      <v-list-item-title>Cut</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                      Cut
+                    </v-btn>
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-content-copy"
+                      variant="text"
+                      rounded="pill"
                       @click="copySelected()"
                       :disabled="selectedItems.length === 0"
                     >
-                      <v-list-item-title>Copy</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                      Copy
+                    </v-btn>
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-content-paste"
+                      variant="text"
+                      rounded="pill"
                       @click="pasteSelected()"
                       :disabled="clipboard.length === 0"
                     >
-                      <v-list-item-title>Paste</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                      Paste
+                    </v-btn>
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-form-textbox"
+                      variant="text"
+                      rounded="pill"
                       @click="promptNewName()"
                       :disabled="selectedItems.length !== 1"
                     >
-                      <v-list-item-title>Rename</v-list-item-title>
-                    </v-list-item>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                      Rename
+                    </v-btn>
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-delete"
+                      rounded="pill"
+                      variant="text"
                       @click="promptDelete()"
                       :disabled="selectedItems.length === 0"
                     >
-                      <v-list-item-title>Delete</v-list-item-title>
-                    </v-list-item>
+                      Delete
+                    </v-btn>
                     <v-divider class="mt-2 mb-2"></v-divider>
-                    <v-list-item
-                      size="small"
-                      rounded="pill"
+                    <v-btn
+                      class="text-none w-100 justify-start"
                       prepend-icon="mdi-information"
+                      rounded="pill"
+                      variant="text"
                       @click="openDetails()"
                       :disabled="selectedItems.length !== 1"
                     >
-                      <v-list-item-title>Details</v-list-item-title>
-                    </v-list-item>
+                      Details
+                    </v-btn>
                   </v-list>
                 </v-menu>
               </v-list-item>
@@ -1344,6 +1352,7 @@ async function updateItems() {
     clearSelection();
     resetPreview();
     isLoading.value = false;
+    setTimeout(() => clearSelection(), 200);
   } catch (err) {
     setCurrentPath("");
     isLoading.value = false;

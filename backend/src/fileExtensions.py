@@ -51,6 +51,7 @@ class FileExtensions:
         "xml",
         "md",
         "sql",
+        "tex"
     ]
 
     documentFileExtensions = [
@@ -59,7 +60,6 @@ class FileExtensions:
         "csv",
         "tsv",
         "ini",
-        "tex",
         "srt",
         "vtt",
         "po",

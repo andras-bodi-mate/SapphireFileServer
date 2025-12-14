@@ -1,9 +1,11 @@
-import zipfile
 import tempfile
+import platform
+import zipfile
 import shutil
 import random
 import base64
 import json
+from os import stat_result
 from pathlib import Path
 from datetime import datetime, timedelta
 from dataclasses import dataclass
@@ -24,6 +26,7 @@ from preview_generator.manager import PreviewManager
 from preview_generator.exception import UnsupportedMimeType
 from tinytag import TinyTag
 from pymediainfo import MediaInfo
+from statx import statx
 
 from logger import Logger
 from core import Core
@@ -117,6 +120,19 @@ class Server:
                 lastUpdate = now
                 yield directoryInfo.toString()
         yield lastDirectoryInfo.toString()
+
+    @staticmethod
+    def getCreationDate(path: Path, stats: stat_result):
+        if platform.system() == 'Windows':
+            return stats.st_ctime
+        else:
+            try:
+                return stats.st_birthtime
+            except AttributeError:
+                btime = statx(path.as_posix()).btime
+                if btime:
+                    return btime
+        return stats.st_mtime
 
     @staticmethod
     def addDirectoryToArchive(archive: zipfile.ZipFile, rootDirectory: Path, directory: Path = None):
@@ -345,7 +361,7 @@ class Server:
             validatePath(path, PathCriteria.exists)
             stats = path.stat()
             return {
-                "created": stats.st_ctime,
+                "created": Server.getCreationDate(path, stats),
                 "lastModified": stats.st_mtime,
                 "lastAccessed": stats.st_atime
             }
