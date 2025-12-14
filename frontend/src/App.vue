@@ -152,6 +152,7 @@
               single-line
               class="no-underline no-text-field-data-padding rounded-pill w-100 pt-0 pb-0 pl-2 mr-8"
               :input-class="!isEditingPath ? 'text-transparent caret-transparent' : ''"
+              :class="{'input-ml-6': isEditingPath}"
               @focus="focusedPathEditField()"
               @blur="setEditedPath()"
             >
@@ -620,7 +621,7 @@
                       align-items: center;
                       white-space: nowrap;
                       overflow-y: hidden;
-                      overflow-x: scroll;
+                      overflow-x: auto;
                       scrollbar-width: none;
                       text-overflow: ellipsis;
                     "
@@ -636,7 +637,7 @@
                       align-items: center;
                       white-space: nowrap;
                       overflow-y: hidden;
-                      overflow-x: scroll;
+                      overflow-x: auto;
                       scrollbar-width: none;
                       text-overflow: ellipsis;
                     "
@@ -651,7 +652,7 @@
                       align-items: center;
                       white-space: nowrap;
                       overflow-y: hidden;
-                      overflow-x: scroll;
+                      overflow-x: auto;
                       scrollbar-width: none;
                       text-overflow: ellipsis;
                     "
@@ -666,7 +667,7 @@
                       align-items: center;
                       white-space: nowrap;
                       overflow-y: hidden;
-                      overflow-x: scroll;
+                      overflow-x: auto;
                       scrollbar-width: none;
                       text-overflow: ellipsis;
                     "
@@ -769,17 +770,18 @@
             <transition name="fade" mode="out-in">
               <div
                 v-if="
-                  isLoadingPreview ||
+                  (isLoadingPreview ||
                   imagePreviewUrl !== null ||
                   textPreview !== null ||
-                  codePreview !== null
+                  codePreview !== null) && 
+                  (selectedItems.length === 1 && selectedItems[0].size > 0)
                 "
                 class="preview-box ml-5 mt-3 rounded-xl"
               >
                 <div
                   v-if="isLoadingPreview"
                   class="d-flex align-center justify-center fill-height"
-                  style="min-height: 200px"
+                  style="aspect-ratio: 4/3"
                 >
                   <v-progress-circular
                     color="grey-lighten-4"
@@ -797,7 +799,7 @@
                   style="
                     user-select: text;
                     -webkit-user-select: text;
-                    overflow: scroll;
+                    overflow: auto;
                     white-space: pre-line;
                   "
                 >
@@ -808,7 +810,7 @@
                   style="
                     user-select: text;
                     -webkit-user-select: text;
-                    overflow: scroll;
+                    overflow: auto;
                   "
                   :language="codePreviewLanguage"
                   :code="codePreview"
@@ -2511,7 +2513,7 @@ export default {
   align-self: flex-start;
   min-width: 0;
   /* required for flex shrink */
-  overflow: scroll;
+  overflow: auto;
   /* ensures nice collapse */
   border: solid 1px rgba(var(--v-border-color), var(--v-border-opacity));
   /* you can Tailwind this too if you want */
@@ -2550,6 +2552,10 @@ export default {
 .no-text-field-data-padding .v-field__input {
   padding: 0;
   padding-left: 6px;
-  overflow-x: scroll;
+  overflow-x: auto;
+}
+
+.input-ml-6 .v-field__input {
+  margin-left: 6px;
 }
 </style>
